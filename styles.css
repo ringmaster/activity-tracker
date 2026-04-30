@@ -1,0 +1,627 @@
+/* ===== D&D Combat Tracker – Global Styles ===== */
+
+/* ---------- Sticky bar container ---------- */
+.dnd-combat-bar-container {
+  position: relative;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ---------- Touch target baseline ---------- */
+.dnd-combat-bar-container button,
+.dnd-combat-bar-container input,
+.dnd-combat-bar-container select {
+  min-height: 44px;
+  min-width: 44px;
+  font-size: 16px; /* prevent iOS zoom on focus */
+  touch-action: manipulation;
+}
+
+/* ---------- Bar layout ---------- */
+.dnd-bar {
+  max-width: 768px;
+  width: 100%;
+  background: var(--background-primary);
+  border-bottom: 2px solid var(--background-modifier-border);
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.dnd-bar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dnd-bar-btn:active {
+  background: var(--background-modifier-hover);
+}
+
+.dnd-bar-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.dnd-bar-btn.active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.dnd-bar-btn.swapped {
+  background: var(--text-accent);
+  color: var(--text-on-accent);
+}
+
+.dnd-bar-actor {
+  flex: 1;
+  min-width: 60px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-weight: 600;
+}
+
+/* ---------- Action bar fields ---------- */
+.dnd-action-bar {
+  max-width: 768px;
+  width: 100%;
+  background: var(--background-primary);
+  border-bottom: 2px solid var(--interactive-accent);
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.dnd-action-input {
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 16px;
+}
+
+.dnd-action-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+}
+
+.dnd-action-input.narrow {
+  width: 60px;
+}
+
+.dnd-action-input.medium {
+  width: 100px;
+  flex: 1;
+}
+
+/* ---------- Dropdowns ---------- */
+.dnd-dropdown {
+  max-width: 768px;
+  width: 100%;
+  margin: 0 auto;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 1001;
+  max-height: 50vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dnd-dropdown-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dnd-dropdown-row:last-child {
+  border-bottom: none;
+}
+
+.dnd-dropdown-row:active {
+  background: var(--background-modifier-hover);
+}
+
+.dnd-dropdown-row.current {
+  background: var(--background-modifier-hover);
+  font-weight: 600;
+}
+
+/* ---------- Turn log ---------- */
+.dnd-turn-log {
+  max-width: 768px;
+  width: 100%;
+  padding: 2px 10px 4px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dnd-turn-log-entry {
+  font-size: 13px;
+  color: var(--text-accent);
+  padding: 1px 0;
+  line-height: 1.4;
+}
+
+/* ---------- Obligation banners ---------- */
+.dnd-banner-stack {
+  max-width: 768px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 6px;
+}
+
+.dnd-obligation-banner {
+  background: var(--background-primary);
+  border: 2px solid var(--text-warning);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dnd-obligation-banner.concentration {
+  border-color: var(--text-error);
+}
+
+.dnd-banner-title {
+  font-weight: 700;
+  color: var(--text-warning);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dnd-obligation-banner.concentration .dnd-banner-title {
+  color: var(--text-error);
+}
+
+.dnd-banner-detail {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.dnd-banner-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dnd-banner-btn {
+  min-height: 40px;
+  min-width: 60px;
+  padding: 4px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dnd-banner-btn:active {
+  background: var(--background-modifier-hover);
+}
+
+.dnd-banner-btn.selected {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.dnd-banner-btn.pass {
+  border-color: var(--text-success);
+}
+
+.dnd-banner-btn.fail {
+  border-color: var(--text-error);
+}
+
+.dnd-banner-btn.dismiss {
+  background: var(--background-modifier-hover);
+}
+
+/* ---------- Inline view ---------- */
+.dnd-inline-view {
+  padding: 12px 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  font-family: var(--font-interface);
+}
+
+.dnd-inline-header {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.dnd-inline-status {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.dnd-combatant-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.dnd-combatant-list > li {
+  margin-inline-start: 0;
+}
+
+.dnd-combatant-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  min-height: 32px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.dnd-combatant-row.current {
+  background: var(--background-modifier-hover);
+  font-weight: 600;
+}
+
+.dnd-combatant-row.dead {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.dnd-combatant-caret {
+  width: 16px;
+  font-weight: 700;
+  color: var(--interactive-accent);
+}
+
+.dnd-combatant-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dnd-combatant-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--text-error);
+  color: var(--text-on-accent);
+  font-weight: 600;
+}
+
+.dnd-combatant-init {
+  width: 48px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.dnd-combatant-ac {
+  width: 36px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.dnd-combatant-hp {
+  width: 56px;
+  text-align: right;
+  font-size: 13px;
+}
+
+.dnd-combatant-hp.bloodied {
+  color: var(--text-error);
+}
+
+.dnd-combatant-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+/* ---------- Run encounter / stop button ---------- */
+.dnd-encounter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--interactive-accent);
+  border-radius: 8px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 12px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dnd-encounter-btn:active {
+  opacity: 0.85;
+}
+
+.dnd-encounter-btn.stop {
+  background: var(--background-secondary);
+  color: var(--text-error);
+  border-color: var(--text-error);
+}
+
+.dnd-encounter-btn.reset {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  border-color: var(--background-modifier-border);
+  font-weight: 400;
+}
+
+/* ---------- Roster confirmation overlay ---------- */
+.dnd-roster-overlay {
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  margin-top: 8px;
+}
+
+.dnd-roster-section {
+  margin-bottom: 12px;
+}
+
+.dnd-roster-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dnd-roster-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  min-height: 40px;
+}
+
+.dnd-roster-name {
+  flex: 1;
+  font-size: 14px;
+}
+
+.dnd-roster-init-input {
+  width: 60px;
+  min-height: 40px;
+  padding: 4px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 16px;
+  text-align: center;
+}
+
+.dnd-roster-init-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+}
+
+.dnd-roster-init-display {
+  width: 60px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* ---------- Conditions chips ---------- */
+.dnd-condition-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+/* ---------- Behavior coaching ---------- */
+.dnd-behavior-section {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.dnd-behavior-label {
+  font-weight: 600;
+  color: var(--text-accent);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+
+/* ---------- Target dropdown specifics ---------- */
+.dnd-dropdown-section-header {
+  padding: 6px 12px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dnd-target-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dnd-target-row.dnd-target-pc {
+  background: var(--background-secondary);
+}
+
+.dnd-target-hp {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.dnd-target-checkbox {
+  margin: 0;
+  accent-color: var(--interactive-accent);
+}
+
+.dnd-target-row input[type=checkbox]:checked::after {
+  width: 100%;
+  height: 100%;
+}
+
+.dnd-target-name {
+  flex: 1;
+  font-size: 14px;
+  text-align: left;
+  justify-content: unset;
+}
+
+.dnd-target-hint {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.dnd-target-hint.resistant {
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+}
+
+.dnd-target-hint.vulnerable {
+  background: var(--text-warning);
+  color: var(--text-on-accent);
+}
+
+.dnd-target-hint.immune {
+  background: var(--text-error);
+  color: var(--text-on-accent);
+}
+
+.dnd-outcome-radios {
+  display: flex;
+  gap: 4px;
+}
+
+.dnd-outcome-radio {
+  min-height: 36px;
+  min-width: 44px;
+  padding: 2px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: 12px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dnd-outcome-radio:active,
+.dnd-outcome-radio.selected {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+/* ---------- Via autocomplete ---------- */
+.dnd-via-suggestion {
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
+  border: none;
+  background: none;
+}
+
+.dnd-via-name {
+  font-weight: 500;
+  flex: 1;
+}
+
+.dnd-via-detail {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.dnd-type-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 120px;
+  max-height: 200px;
+}
+
+.dnd-via-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* ---------- Combat over overlay ---------- */
+.dnd-combat-over {
+  text-align: center;
+  padding: 16px;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text-success);
+}
