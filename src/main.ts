@@ -67,6 +67,12 @@ export default class ActivityTrackerPlugin extends Plugin {
         this.updateBarVisibility();
       }),
     );
+
+    // On plugin load, the workspace may already be showing a note with
+    // an active encounter. Wait for layout to be ready, then check.
+    this.app.workspace.onLayoutReady(() => {
+      setTimeout(() => this.updateBarVisibility(), 200);
+    });
   }
 
   onunload() {
@@ -151,6 +157,7 @@ export default class ActivityTrackerPlugin extends Plugin {
         parsed,
       );
       state.onDeactivate = () => this.hideBar();
+      state.partyNotePath = this.settings.partyNotePath;
       this.encounterStates.set(key, state);
     }
 
@@ -199,8 +206,10 @@ export default class ActivityTrackerPlugin extends Plugin {
 
     // If this encounter is active, schedule a visibility check.
     // updateBarVisibility handles the reading-view-only guard.
+    // Use a longer delay to ensure the view mode has settled after
+    // plugin reload or view switches.
     if (state.active) {
-      setTimeout(() => this.updateBarVisibility(), 50);
+      setTimeout(() => this.updateBarVisibility(), 150);
     }
   }
 

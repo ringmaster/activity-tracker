@@ -3,13 +3,11 @@
 
   let {
     encounter,
-    showOutcomes = false,
     selected = $bindable<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>({}),
     onClose,
     damageType,
   }: {
     encounter: EncounterState;
-    showOutcomes?: boolean;
     selected: Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>;
     onClose?: () => void;
     damageType?: string;
@@ -85,7 +83,7 @@
             <span class="dnd-target-hint {hint.className}">{hint.label}</span>
           {/if}
 
-          {#if showOutcomes && sel.checked}
+          {#if sel.checked}
             <div class="dnd-outcome-radios">
               <button
                 class="dnd-outcome-radio"
@@ -134,7 +132,7 @@
             {/if}
           </button>
 
-          {#if showOutcomes && sel.checked}
+          {#if sel.checked}
             <div class="dnd-outcome-radios">
               <button
                 class="dnd-outcome-radio"

@@ -65,10 +65,7 @@
   border-color: var(--interactive-accent);
 }
 
-.dnd-bar-btn.swapped {
-  background: var(--text-accent);
-  color: var(--text-on-accent);
-}
+
 
 .dnd-bar-actor {
   flex: 1;
@@ -153,6 +150,18 @@
 .dnd-dropdown-row.current {
   background: var(--background-modifier-hover);
   font-weight: 600;
+}
+
+/* ---------- Spell description ---------- */
+.dnd-spell-desc {
+  max-width: 768px;
+  width: 100%;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #7eb8da;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
 }
 
 /* ---------- Turn log ---------- */

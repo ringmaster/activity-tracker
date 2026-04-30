@@ -2,6 +2,8 @@ import type { EncounterState } from "./encounter-state.svelte";
 import type { DamageComponent, CombatAction } from "../types/encounter";
 import type { AttackTargetResult } from "../types/actions";
 import { applyOutcome, totalDamage, concentrationDC } from "../utils/damage-calc";
+import { findSpell } from "../data/spell-lookup";
+import { updatePartyMember } from "./party-loader";
 import { nowTimestamp } from "../utils/time";
 import { createObligation } from "./obligation-engine.svelte";
 
@@ -14,14 +16,15 @@ export interface AttackParams {
   spellKey?: string;
   slot?: number;
   conc?: boolean;
+  isSpell?: boolean;
 }
 
 export function commitAttack(state: EncounterState, params: AttackParams): void {
   const hasDamage = params.baseDmg.some((d) => d.n > 0);
 
   const tgt: AttackTargetResult[] = params.targets.map((t) => {
-    if (!hasDamage) {
-      // No damage entered; this is a miss
+    if (!hasDamage && !params.isSpell) {
+      // No damage on a weapon attack = miss
       return { who: t.who, hit: "zero" as const };
     }
     const dmg = applyOutcome(params.baseDmg, t.outcome);
@@ -39,6 +42,7 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
       tgt,
     },
   };
+  if (params.isSpell) entry.attack.spell = true;
   if (params.save) entry.attack.save = params.save;
   state.log.push(entry);
 
@@ -58,10 +62,11 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
   }
 
   // Create obligation if the spell has one
-  if (params.spellKey && state.spells[params.spellKey]?.obligation) {
+  const spellDef = params.spellKey ? state.findSpellDef(params.spellKey) : undefined;
+  if (spellDef?.obligation) {
     createObligation(
       state,
-      params.spellKey,
+      params.spellKey!,
       params.targets.map((t) => t.who),
       state.log.length - 1,
     );
@@ -115,112 +120,6 @@ export function commitHeal(state: EncounterState, params: HealParams): void {
   state.flush();
 }
 
-export interface BuffParams {
-  by: string;
-  via: string;
-  targets: string[];
-  spellKey?: string;
-  slot?: number;
-  conc?: boolean;
-}
-
-export function commitBuff(state: EncounterState, params: BuffParams): void {
-  const entry: any = {
-    buff: {
-      by: params.by,
-      via: params.via,
-      tgt: params.targets,
-    },
-  };
-  if (params.slot) entry.buff.slot = params.slot;
-  if (params.conc) entry.buff.conc = true;
-  state.log.push(entry);
-
-  if (params.slot) {
-    decrementSpellSlot(state, params.by, params.slot);
-  }
-  if (params.conc && params.spellKey) {
-    setConcentration(state, params.by, params.spellKey, state.log.length - 1);
-  }
-  if (params.spellKey && state.spells[params.spellKey]?.obligation) {
-    createObligation(state, params.spellKey, params.targets, state.log.length - 1);
-  }
-
-  state.flush();
-}
-
-export interface DebuffParams {
-  by: string;
-  via: string;
-  targets: string[];
-  conditions?: string[];
-  spellKey?: string;
-  slot?: number;
-  conc?: boolean;
-}
-
-export function commitDebuff(state: EncounterState, params: DebuffParams): void {
-  const entry: any = {
-    debuff: {
-      by: params.by,
-      via: params.via,
-      tgt: params.targets,
-    },
-  };
-  if (params.slot) entry.debuff.slot = params.slot;
-  if (params.conc) entry.debuff.conc = true;
-  state.log.push(entry);
-
-  // Apply conditions to targets
-  if (params.conditions) {
-    for (const targetId of params.targets) {
-      const combatant = state.getCombatant(targetId);
-      if (!combatant) continue;
-      for (const condition of params.conditions) {
-        if (!combatant.conditions.includes(condition)) {
-          combatant.conditions.push(condition);
-        }
-        if (condition === "dead" && combatant.type === "npc" && combatant.hp) {
-          combatant.hp.current = 0;
-        }
-      }
-    }
-  }
-
-  if (params.slot) {
-    decrementSpellSlot(state, params.by, params.slot);
-  }
-  if (params.conc && params.spellKey) {
-    setConcentration(state, params.by, params.spellKey, state.log.length - 1);
-  }
-  if (params.spellKey && state.spells[params.spellKey]?.obligation) {
-    createObligation(state, params.spellKey, params.targets, state.log.length - 1);
-  }
-
-  state.flush();
-}
-
-export interface SaveParams {
-  who: string;
-  stat: string;
-  dc: number;
-  result: "pass" | "fail";
-  forSpell?: string;
-}
-
-export function commitSave(state: EncounterState, params: SaveParams): void {
-  state.log.push({
-    save: {
-      who: params.who,
-      stat: params.stat,
-      dc: params.dc,
-      result: params.result,
-      for: params.forSpell,
-    },
-  });
-  state.flush();
-}
-
 export interface NoteParams {
   by: string;
   text: string;
@@ -238,8 +137,9 @@ export function commitNote(state: EncounterState, params: NoteParams): void {
 
 /** Apply damage to a combatant, handling temp HP, death, and concentration. */
 /**
- * If the via+type combination isn't already in the actor's actions list,
- * add it so it autocompletes next time.
+ * If the via isn't already known to the actor, learn it for future autocomplete.
+ * SRD spells are stored as a name string in the actor's `spells` list.
+ * Non-spell actions are stored as full objects in `actions`.
  */
 function learnAction(
   state: EncounterState,
@@ -250,23 +150,46 @@ function learnAction(
   const actor = state.getCombatant(actorId);
   if (!actor || !via) return;
 
-  // Check if this action name already exists
-  if (!actor.actions) actor.actions = [];
-  const existing = actor.actions.find(
-    (a) => a.name.toLowerCase() === via.toLowerCase(),
-  );
-  if (existing) return;
+  const lower = via.toLowerCase();
 
-  // Build the new action with damage types (no amounts; those are rolled live)
+  // Already known as an action?
+  if (actor.actions?.some((a) => a.name.toLowerCase() === lower)) return;
+
+  // Already known as a spell?
+  if (actor.spells?.some((s) =>
+    (typeof s === "string" ? s : s.name).toLowerCase() === lower,
+  )) return;
+
+  // If it matches an SRD spell, store as a spell name string
+  const srd = findSpell(via);
+  if (srd) {
+    if (!actor.spells) actor.spells = [];
+    actor.spells.push(srd.name);
+
+    // Persist to party file for PCs
+    if (actor.type === "pc") {
+      updatePartyMember(state.app, state.partyNotePath, actor.id, undefined, [srd.name]);
+    }
+    return;
+  }
+
+  // Otherwise store as a weapon/ability action
+  if (!actor.actions) actor.actions = [];
   const types = dmgComponents
     .filter((d) => d.type)
     .map((d) => ({ dice: "", type: d.type }));
 
-  actor.actions.push({
+  const newAction = {
     name: via,
     type: "attack",
     dmg: types.length > 0 ? types : undefined,
-  });
+  };
+  actor.actions.push(newAction);
+
+  // Persist to party file for PCs
+  if (actor.type === "pc") {
+    updatePartyMember(state.app, state.partyNotePath, actor.id, [newAction]);
+  }
 }
 
 function applyDamage(state: EncounterState, targetId: string, amount: number): void {

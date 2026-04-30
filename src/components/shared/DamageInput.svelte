@@ -8,8 +8,9 @@
     "force", "psychic",
   ];
 
-  let { value = $bindable([{ n: 0, type: "" }]) }: {
+  let { value = $bindable([{ n: 0, type: "" }]), oncommit }: {
     value: DamageComponent[];
+    oncommit?: () => void;
   } = $props();
 
   let activeTypeIdx = $state<number | null>(null);
@@ -60,10 +61,11 @@
     <input
       type="number"
       inputmode="numeric"
-      class="dnd-action-input narrow"
+      class="dnd-action-input narrow dnd-dmg-number"
       placeholder="dmg"
       value={comp.n || ""}
       oninput={(e) => updateN(idx, (e.target as HTMLInputElement).value)}
+      onkeydown={(e) => { if (e.key === "Enter") oncommit?.(); }}
     />
     <div style="position: relative;">
       <input

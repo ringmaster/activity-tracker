@@ -1,5 +1,3 @@
-# Bandit Ambush
-
 The party rounds a bend in the forest road and finds a fallen cart blocking the path. As they approach, bandits emerge from the treeline.
 
 ```dnd-combat
@@ -32,8 +30,6 @@ combatants:
       notes: |
         Opens with Multiattack on the nearest PC.
         If two bandits drop, shouts for retreat.
-    spell_slots:
-      1: 0
   - name: Bandit
     type: npc
     statblock: Bandit
@@ -60,9 +56,16 @@ combatants:
       - name: Dagger
         type: attack
         dmg: [{dice: "1d4+1", type: piercing}]
-      - name: Fire Bolt
+    spells:
+      - Fire Bolt
+      - Burning Hands
+      - Shield
+      - Healing Word
+      - name: "Hex Blast"
         type: attack
-        dmg: [{dice: "2d10", type: fire}]
+        range: "60ft"
+        dmg: [{n: 9, type: necrotic}]
+        effect: "Target has disadvantage on next attack"
     behavior:
       motive: "Loyal to the captain; stays at range."
       priority: "Cluster targets for Burning Hands. Otherwise Fire Bolt the biggest threat."
@@ -78,21 +81,4 @@ combatants:
     spell_slots:
       1: 3
       2: 2
-
-spells:
-  burning-hands:
-    name: "Burning Hands"
-    type: aoe
-    range: "15ft cone"
-    save: {stat: dex, dc: 13, on_pass: half}
-    dmg: [{n: 14, type: fire}]
-  shield:
-    name: Shield
-    type: buff
-    effect: "+5 AC until start of next turn"
-  healing-word:
-    name: "Healing Word"
-    type: heal
-    range: "60ft"
-    effect: "1d4+3 healing"
 ```

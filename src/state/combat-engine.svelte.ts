@@ -148,7 +148,7 @@ export function nextTurn(state: EncounterState): void {
       if (entry.start_turn) {
         // Replaying history; just move the cursor
         state.currentTurn = entry.start_turn.who;
-        state.flush();
+        state.flushNow();
         return;
       }
     }
@@ -197,7 +197,7 @@ export function nextTurn(state: EncounterState): void {
     actor.legendary_actions.current = actor.legendary_actions.max;
   }
 
-  state.flush();
+  state.flushNow();
 }
 
 /** Find the index of the last start_turn entry for a given combatant. */
@@ -241,7 +241,7 @@ export function prevTurn(state: EncounterState): void {
   }
 
   state.currentTurn = sorted[prevIdx].id;
-  state.flush();
+  state.flushNow();
 }
 
 /** End the encounter. */

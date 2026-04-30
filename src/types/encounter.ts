@@ -69,6 +69,8 @@ export interface Combatant {
   spell_slots?: Record<number, { current: number; max: number }>;
   legendary_actions?: { max: number; current: number } | null;
   actions?: CombatAction[];
+  /** Spells known by this combatant. Strings are looked up from SRD; objects are full definitions. */
+  spells?: (string | Spell)[];
   behavior?: Behavior;
   recharge?: Record<string, boolean>;
   hidden?: boolean;
@@ -81,6 +83,7 @@ export interface AuthoredCombatant {
   type: "npc" | "pc";
   statblock?: string;
   init?: number | null;
+  ac?: number;
   count?: number;
   hp?: { current: number; max: number };
   damage_taken?: number;
@@ -90,6 +93,8 @@ export interface AuthoredCombatant {
   /** Authored as plain numbers (max slots); normalized to {current, max} at load. */
   spell_slots?: Record<number, number | { current: number; max: number }>;
   legendary_actions?: { max: number; current: number } | null;
+  actions?: CombatAction[];
+  spells?: (string | Spell)[];
   behavior?: Behavior;
 }
 
@@ -128,7 +133,6 @@ export interface EncounterData {
   round: number;
   current_turn: string | null;
   combatants: Combatant[];
-  spells?: Record<string, Spell>;
   log: LogEntry[];
   active_obligations: ActiveObligation[];
 }
@@ -140,7 +144,6 @@ export interface AuthoredEncounterData {
   round?: number;
   current_turn?: string | null;
   combatants: AuthoredCombatant[];
-  spells?: Record<string, Spell>;
   log?: LogEntry[];
   active_obligations?: ActiveObligation[];
 }

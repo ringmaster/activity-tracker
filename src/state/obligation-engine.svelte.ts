@@ -27,7 +27,7 @@ export function createObligation(
   targets: string[],
   castLogLine: number,
 ): void {
-  const spell = state.spells[spellKey];
+  const spell = state.findSpellDef(spellKey);
   if (!spell?.obligation) return;
 
   const id = `ob-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -59,7 +59,7 @@ export function checkObligations(
   const banners: ObligationBannerData[] = [];
 
   for (const ob of state.activeObligations) {
-    const spell = state.spells[ob.spell];
+    const spell = state.findSpellDef(ob.spell);
     if (!spell?.obligation) continue;
     if (spell.obligation.trigger !== trigger) continue;
 
@@ -147,7 +147,7 @@ export function resolveObligation(
     state.activeObligations.splice(obIdx, 1);
   } else {
     // Regular obligation
-    const spell = state.spells[ob.spell];
+    const spell = state.findSpellDef(ob.spell);
     const spellOb = spell?.obligation;
 
     // Determine smart default for disposition if not explicit

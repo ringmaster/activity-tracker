@@ -53,8 +53,11 @@
   function summarizeLogEntry(entry: any): string | null {
     if (entry.attack) {
       const actorName = encounter.getCombatant(entry.attack.by)?.name ?? entry.attack.by;
-      const allMiss = entry.attack.tgt.every((t: any) => !t.dmg || t.dmg.length === 0);
-      const targets = entry.attack.tgt
+      const isSpell = !!entry.attack.spell;
+      const hasDamage = entry.attack.tgt.some((t: any) => t.dmg && t.dmg.length > 0);
+      const allNoDamage = entry.attack.tgt.every((t: any) => !t.dmg || t.dmg.length === 0);
+
+      const targetParts = entry.attack.tgt
         .map((t: any) => {
           const name = encounter.getCombatant(t.who)?.name ?? t.who;
           if (t.dmg && t.dmg.length > 0) {
@@ -64,10 +67,18 @@
           return name;
         })
         .join(", ");
-      if (allMiss) {
-        return `${actorName} missed ${targets} with ${entry.attack.via}.`;
+
+      if (isSpell) {
+        if (hasDamage) {
+          return `${actorName} cast ${entry.attack.via} on ${targetParts}.`;
+        }
+        return `${actorName} cast ${entry.attack.via} on ${targetParts}.`;
       }
-      return `${actorName} attacked ${targets} with ${entry.attack.via}.`;
+
+      if (allNoDamage) {
+        return `${actorName} missed ${targetParts} with ${entry.attack.via}.`;
+      }
+      return `${actorName} attacked ${targetParts} with ${entry.attack.via}.`;
     }
     if (entry.heal) {
       const actorName = encounter.getCombatant(entry.heal.by)?.name ?? entry.heal.by;

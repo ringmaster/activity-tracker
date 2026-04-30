@@ -20,9 +20,6 @@ export class EncounterState {
   // Combatants
   combatants = $state<Combatant[]>([]);
 
-  // Spells library
-  spells = $state<Record<string, Spell>>({});
-
   // Action log
   log = $state<LogEntry[]>([]);
 
@@ -65,8 +62,11 @@ export class EncounterState {
   /** Called when the encounter deactivates so the plugin can hide the bar. */
   onDeactivate: (() => void) | null = null;
 
+  /** Path to the party note for persisting learned PC actions. */
+  partyNotePath: string = "party.md";
+
   // File reference for YAML persistence
-  private app: App;
+  app: App;
   private file: TFile;
   private sectionStart: number;
   private sectionEnd: number;
@@ -94,7 +94,6 @@ export class EncounterState {
     this.active = data.active ?? false;
     this.round = data.round ?? 0;
     this.currentTurn = data.current_turn ?? null;
-    this.spells = data.spells ?? {};
     this.log = data.log ?? [];
     this.activeObligations = data.active_obligations ?? [];
 
@@ -115,6 +114,20 @@ export class EncounterState {
     return this.combatants.find((c) => c.id === id);
   }
 
+  /** Find a fully-specified spell definition by name, searching all combatants. */
+  findSpellDef(name: string): Spell | undefined {
+    const lower = name.toLowerCase();
+    for (const c of this.combatants) {
+      if (!c.spells) continue;
+      for (const entry of c.spells) {
+        if (typeof entry !== "string" && entry.name.toLowerCase() === lower) {
+          return entry;
+        }
+      }
+    }
+    return undefined;
+  }
+
   /** Update section bounds (if code block processor re-runs). */
   updateSectionBounds(start: number, end: number): void {
     this.sectionStart = start;
@@ -130,7 +143,6 @@ export class EncounterState {
       round: this.round,
       current_turn: this.currentTurn,
       combatants: this.combatants,
-      spells: this.spells,
       log: this.log,
       active_obligations: this.activeObligations,
     }));
@@ -203,6 +215,7 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
 
   if (partial.ac != null) base.ac = partial.ac;
   if (partial.actions) base.actions = partial.actions;
+  if (partial.spells) base.spells = partial.spells;
   if (partial.statblock) base.statblock = partial.statblock;
   if (partial.recharge) base.recharge = partial.recharge;
   if (partial.hidden) base.hidden = partial.hidden;

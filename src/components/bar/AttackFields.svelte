@@ -2,6 +2,7 @@
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import type { DamageComponent, AuthoredDamage } from "../../types/encounter";
   import { commitAttack } from "../../state/action-logger.svelte";
+  import { searchSpells, findSpell, type SrdSpell } from "../../data/spell-lookup";
   import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
   import DamageInput from "../shared/DamageInput.svelte";
 
@@ -12,126 +13,173 @@
 
   let via = $state("");
   let dmgComponents = $state<DamageComponent[]>([{ n: 0, type: "" }]);
-  let hasSave = $state(false);
-  let saveStat = $state("dex");
-  let saveDC = $state("");
   let showTargets = $state(true);
   let showViaSuggestions = $state(false);
   let spellKey = $state("");
   let slot = $state("");
   let isConc = $state(false);
+  let isSpell = $state(false);
+  let spellDesc = $state<string | null>(null);
 
   let targets = $state<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>({});
 
   interface ActionSuggestion {
     name: string;
-    /** Display-only dice expressions, e.g. [{dice: "2d6+2", type: "slashing"}] */
     authoredDmg?: AuthoredDamage[];
-    /** For spells that define numeric damage */
     spellDmg?: DamageComponent[];
-    save?: { stat: string; dc: number };
     isSpell?: boolean;
     spellKey?: string;
     conc?: boolean;
+    srdSpell?: SrdSpell;
   }
 
-  // Collect available actions from the current actor (combatant actions + spells)
+  // Collect available actions from the current actor: weapon actions, then their spells
   let availableActions = $derived.by((): ActionSuggestion[] => {
     const actor = encounter.effectiveActor;
     if (!actor) return [];
 
     const results: ActionSuggestion[] = [];
 
-    // Combatant's authored actions
+    // Weapon/ability actions
     if (actor.actions) {
       for (const action of actor.actions) {
         results.push({
           name: action.name,
           authoredDmg: action.dmg,
-          save: action.save ? { stat: Array.isArray(action.save.stat) ? action.save.stat[0] : action.save.stat, dc: action.save.dc } : undefined,
         });
       }
     }
 
-    // Behavior extra_actions
     if (actor.behavior?.extra_actions) {
       for (const action of actor.behavior.extra_actions) {
         results.push({
           name: action.name,
           authoredDmg: action.dmg,
-          save: action.save ? { stat: Array.isArray(action.save.stat) ? action.save.stat[0] : action.save.stat, dc: action.save.dc } : undefined,
         });
       }
     }
 
-    // Encounter spells
-    for (const [key, spell] of Object.entries(encounter.spells)) {
-      results.push({
-        name: spell.name,
-        spellDmg: spell.dmg,
-        save: spell.save ? { stat: Array.isArray(spell.save.stat) ? spell.save.stat[0] : spell.save.stat, dc: spell.save.dc } : undefined,
-        isSpell: true,
-        spellKey: key,
-        conc: spell.concentration,
-      });
+    // Combatant's spells (strings resolved from SRD, objects used directly)
+    if (actor.spells) {
+      for (const entry of actor.spells) {
+        if (typeof entry === "string") {
+          // SRD lookup by name
+          const srd = findSpell(entry);
+          if (srd) {
+            results.push({
+              name: srd.name,
+              authoredDmg: srd.damageType ? [{ dice: srd.dice ?? "", type: srd.damageType }] : undefined,
+              isSpell: true,
+              conc: srd.concentration,
+              srdSpell: srd,
+            });
+          } else {
+            // Unknown spell name; show it anyway without SRD data
+            results.push({ name: entry, isSpell: true });
+          }
+        } else {
+          // Fully specified spell object
+          results.push({
+            name: entry.name,
+            spellDmg: entry.dmg,
+            isSpell: true,
+            spellKey: entry.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+            conc: entry.concentration,
+          });
+        }
+      }
     }
 
     return results;
   });
 
-  let filteredActions = $derived(
-    via.length > 0
+  // Combined suggestions: authored actions first, then SRD spells (only when 3+ chars typed)
+  let combinedSuggestions = $derived.by((): ActionSuggestion[] => {
+    const authoredMatches = via.length > 0
       ? availableActions.filter((a) => a.name.toLowerCase().includes(via.toLowerCase()))
-      : availableActions,
-  );
+      : availableActions;
+
+    // Only search SRD when 3+ characters are typed
+    if (via.length < 3) return authoredMatches;
+
+    const srdMatches = searchSpells(via);
+    // Exclude SRD spells that duplicate an authored action name
+    const authoredNames = new Set(authoredMatches.map((a) => a.name.toLowerCase()));
+    const srdSuggestions: ActionSuggestion[] = srdMatches
+      .filter((s) => !authoredNames.has(s.name.toLowerCase()))
+      .map((s) => ({
+        name: s.name,
+        authoredDmg: s.damageType ? [{ dice: s.dice ?? "", type: s.damageType }] : undefined,
+        isSpell: true,
+        conc: s.concentration,
+        srdSpell: s,
+      }));
+
+    return [...authoredMatches, ...srdSuggestions];
+  });
 
   let targetLabel = $derived.by(() => {
     const checked = Object.entries(targets).filter(([_, t]) => t.checked);
-    if (checked.length === 0) return "Targets";
+    const actorName = encounter.effectiveActor?.name ?? "?";
+    if (checked.length === 0) return `${actorName} \u2192`;
     if (checked.length === 1) {
       const id = checked[0][0];
       const c = encounter.getCombatant(id);
-      return c?.name ?? id;
+      return `\u2192 ${c?.name ?? id}`;
     }
-    return `${checked.length} targets`;
+    return `\u2192 ${checked.length} targets`;
   });
 
   function selectAction(action: ActionSuggestion) {
     via = action.name;
+    isSpell = !!action.isSpell;
 
-    if (action.authoredDmg && action.authoredDmg.length > 0) {
-      // Authored actions: fill in damage types only, leave amount blank for manual entry
-      dmgComponents = action.authoredDmg.map((d) => ({ n: 0, type: d.type }));
-    } else if (action.spellDmg && action.spellDmg.length > 0) {
-      // Spells with numeric damage: fill in types only
-      dmgComponents = action.spellDmg.map((d) => ({ n: 0, type: d.type }));
+    if (action.srdSpell) {
+      spellDesc = action.srdSpell.desc;
+      if (action.srdSpell.damageType) {
+        dmgComponents = [{ n: 0, type: action.srdSpell.damageType }];
+      }
+      if (action.srdSpell.concentration) {
+        isConc = true;
+      }
+    } else {
+      spellDesc = null;
+      if (action.authoredDmg && action.authoredDmg.length > 0) {
+        dmgComponents = action.authoredDmg.map((d) => ({ n: 0, type: d.type }));
+      } else if (action.spellDmg && action.spellDmg.length > 0) {
+        dmgComponents = action.spellDmg.map((d) => ({ n: 0, type: d.type }));
+      }
+      if (action.isSpell && action.spellKey) {
+        spellKey = action.spellKey;
+      }
+      if (action.conc) {
+        isConc = true;
+      }
     }
 
-    if (action.save) {
-      hasSave = true;
-      saveStat = action.save.stat;
-      saveDC = String(action.save.dc);
-    }
-    if (action.isSpell && action.spellKey) {
-      spellKey = action.spellKey;
-    }
-    if (action.conc) {
-      isConc = true;
-    }
     showViaSuggestions = false;
+
+    // Focus the damage number input after selection
+    requestAnimationFrame(() => {
+      const dmgInput = document.querySelector(".dnd-dmg-number") as HTMLInputElement | null;
+      dmgInput?.focus();
+    });
   }
 
   function handleViaInput(event: Event) {
     via = (event.target as HTMLInputElement).value;
-    showViaSuggestions = filteredActions.length > 0;
+    showViaSuggestions = combinedSuggestions.length > 0;
+
+    // Typing clears the selected spell state; a new selection is needed
+    spellDesc = null;
+    isSpell = false;
   }
 
   function handleViaFocus() {
-    showViaSuggestions = availableActions.length > 0;
+    showViaSuggestions = combinedSuggestions.length > 0;
   }
 
   function handleViaBlur() {
-    // Delay to allow tap on suggestion
     setTimeout(() => { showViaSuggestions = false; }, 200);
   }
 
@@ -149,13 +197,11 @@
       by: actor.id,
       via: via || "attack",
       baseDmg: dmgComponents.filter((d) => d.n > 0),
-      save: hasSave
-        ? { stat: saveStat, dc: parseInt(saveDC, 10) || 10 }
-        : undefined,
       targets: selectedTargets,
       spellKey: spellKey || undefined,
       slot: slot ? parseInt(slot, 10) : undefined,
       conc: isConc || undefined,
+      isSpell: isSpell || undefined,
     });
 
     onDone();
@@ -171,7 +217,7 @@
 
   <input
     type="text"
-    class="dnd-action-input medium"
+    class="dnd-action-input medium dnd-via-input"
     placeholder="via"
     value={via}
     oninput={handleViaInput}
@@ -179,39 +225,20 @@
     onblur={handleViaBlur}
   />
 
-  <DamageInput bind:value={dmgComponents} />
-
-  {#if hasSave}
-    <input
-      type="text"
-      class="dnd-action-input narrow"
-      placeholder="stat"
-      bind:value={saveStat}
-    />
-    <input
-      type="number"
-      inputmode="numeric"
-      class="dnd-action-input narrow"
-      placeholder="DC"
-      bind:value={saveDC}
-    />
-  {/if}
-
-  <button
-    class="dnd-bar-btn"
-    onclick={() => { hasSave = !hasSave; }}
-    class:active={hasSave}
-    title="Toggle save"
-  >Save</button>
+  <DamageInput bind:value={dmgComponents} oncommit={handleCommit} />
 
   <button class="dnd-bar-btn active" onclick={handleCommit}>
     Commit
   </button>
 </div>
 
-{#if showViaSuggestions && filteredActions.length > 0}
+{#if spellDesc}
+  <div class="dnd-spell-desc">{spellDesc}</div>
+{/if}
+
+{#if showViaSuggestions && combinedSuggestions.length > 0}
   <div class="dnd-dropdown" style="max-height: 240px;">
-    {#each filteredActions as action}
+    {#each combinedSuggestions as action}
       <button
         class="dnd-dropdown-row dnd-via-suggestion"
         onmousedown={() => selectAction(action)}
@@ -219,7 +246,7 @@
         <span class="dnd-via-name">{action.name}</span>
         {#if action.authoredDmg && action.authoredDmg.length > 0}
           <span class="dnd-via-detail">
-            {action.authoredDmg.map((d) => `${d.dice} ${d.type}`).join(" + ")}
+            {action.authoredDmg.map((d) => `${d.dice} ${d.type}`.trim()).join(" + ")}
           </span>
         {:else if action.spellDmg && action.spellDmg.length > 0}
           <span class="dnd-via-detail">
@@ -237,9 +264,14 @@
 {#if showTargets}
   <TargetsDropdown
     {encounter}
-    showOutcomes={hasSave}
     bind:selected={targets}
-    onClose={() => { showTargets = false; }}
+    onClose={() => {
+      showTargets = false;
+      requestAnimationFrame(() => {
+        const viaInput = document.querySelector(".dnd-via-input") as HTMLInputElement | null;
+        viaInput?.focus();
+      });
+    }}
     damageType={dmgComponents[0]?.type}
   />
 {/if}
