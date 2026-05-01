@@ -924,26 +924,31 @@
   z-index: 1002;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 2px;
-  padding: 6px;
+  gap: 4px;
+  padding: 8px;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  min-width: 200px;
+  min-width: 240px;
 }
 
 .dnd-dmg-type-option {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   padding: 4px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: none;
   cursor: pointer;
+}
+
+.dnd-dmg-type-option .dnd-dmg-icon {
+  width: 32px !important;
+  height: 32px !important;
 }
 
 .dnd-dmg-type-option:active,
