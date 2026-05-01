@@ -96,6 +96,7 @@ export function startEncounter(
         damage_taken: 0,
         temp_hp: 0,
         conditions: [],
+        tags: [],
         concentration: null,
         actions: pc.actions,
       });
@@ -275,6 +276,7 @@ export function resetEncounter(state: EncounterState): void {
       hp: c.hp ? { current: c.hp.max, max: c.hp.max } : undefined,
       temp_hp: 0,
       conditions: [],
+      tags: [],
       concentration: null,
       legendary_actions: c.legendary_actions
         ? { max: c.legendary_actions.max, current: c.legendary_actions.max }

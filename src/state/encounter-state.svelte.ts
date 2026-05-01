@@ -201,6 +201,7 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
     init: partial.init ?? null,
     temp_hp: partial.temp_hp ?? 0,
     conditions: partial.conditions ?? [],
+    tags: partial.tags ?? [],
     concentration: partial.concentration ?? null,
   };
 

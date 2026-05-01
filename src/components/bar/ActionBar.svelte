@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
-  import AttackFields from "./AttackFields.svelte";
-  import HealFields from "./HealFields.svelte";
+  import ActionFields from "./ActionFields.svelte";
   import NoteFields from "./NoteFields.svelte";
 
   let { encounter }: { encounter: EncounterState } = $props();
@@ -12,9 +11,11 @@
 </script>
 
 {#if encounter.activeAction === "attack"}
-  <AttackFields {encounter} onDone={handleDone} />
+  <ActionFields {encounter} onDone={handleDone} preset="attack" />
+{:else if encounter.activeAction === "cast"}
+  <ActionFields {encounter} onDone={handleDone} preset="cast" />
 {:else if encounter.activeAction === "heal"}
-  <HealFields {encounter} onDone={handleDone} />
+  <ActionFields {encounter} onDone={handleDone} preset="heal" />
 {:else if encounter.activeAction === "note"}
   <NoteFields {encounter} onDone={handleDone} />
 {/if}

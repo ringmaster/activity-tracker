@@ -54,6 +54,18 @@ export interface CombatAction {
   slot?: number;
 }
 
+export type TagTrigger = "start_of_turn" | "end_of_turn" | "when_damaged";
+
+export interface CombatTag {
+  id: string;
+  name: string;
+  source?: string;
+  note?: string;
+  trigger?: TagTrigger;
+  onTrigger?: string;
+  autoRemove?: "on_save" | "on_source_end" | "manual";
+}
+
 export interface Combatant {
   id: string;
   name: string;
@@ -65,6 +77,7 @@ export interface Combatant {
   damage_taken?: number;
   temp_hp: number;
   conditions: string[];
+  tags: CombatTag[];
   concentration: { spell: string; line_ref: number } | null;
   spell_slots?: Record<number, { current: number; max: number }>;
   legendary_actions?: { max: number; current: number } | null;

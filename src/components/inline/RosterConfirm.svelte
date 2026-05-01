@@ -12,11 +12,12 @@
 
   // Local init values for editing
   let npcInits = $state<Record<string, string>>({});
+  let showNpcs = $state(false);
   let pcInits = $state<Record<string, string>>({});
 
   // Multiple guest slots
-  let nextGuestKey = $state(1);
-  let guests = $state<{ key: number; name: string; init: string }[]>([{ key: 0, name: "", init: "" }]);
+  let nextGuestKey = $state(0);
+  let guests = $state<{ key: number; name: string; init: string }[]>([]);
 
   // Initialize NPC init values
   $effect(() => {
@@ -110,25 +111,30 @@
   </div>
 
   <div class="dnd-roster-section">
-    <h4>NPCs (auto-rolled)</h4>
-    {#each npcs as npc (npc.id)}
-      <div class="dnd-roster-row">
-        <span class="dnd-roster-name">
-          {npc.name}
-          {#if npc.hp}
-            <span style="color: var(--text-muted); font-size: 12px;">
-              HP {npc.hp.current}/{npc.hp.max}
-            </span>
-          {/if}
-        </span>
-        <input
-          type="number"
-          inputmode="numeric"
-          class="dnd-roster-init-input"
-          bind:value={npcInits[npc.id]}
-        />
-      </div>
-    {/each}
+    <button class="dnd-disclosure-header" onclick={() => { showNpcs = !showNpcs; }}>
+      <h4 style="margin: 0;">NPCs (auto-rolled)</h4>
+      <span class="dnd-disclosure-arrow" class:open={showNpcs}>{showNpcs ? "\u25BC" : "\u25B6"}</span>
+    </button>
+    {#if showNpcs}
+      {#each npcs as npc (npc.id)}
+        <div class="dnd-roster-row">
+          <span class="dnd-roster-name">
+            {npc.name}
+            {#if npc.hp}
+              <span style="color: var(--text-muted); font-size: 12px;">
+                HP {npc.hp.current}/{npc.hp.max}
+              </span>
+            {/if}
+          </span>
+          <input
+            type="number"
+            inputmode="numeric"
+            class="dnd-roster-init-input"
+            bind:value={npcInits[npc.id]}
+          />
+        </div>
+      {/each}
+    {/if}
   </div>
 
   <div style="display: flex; gap: 8px;">

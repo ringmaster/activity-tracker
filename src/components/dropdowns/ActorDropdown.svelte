@@ -74,10 +74,13 @@
           &middot; Concentrating: {actor.concentration.spell}
         {/if}
       </div>
-      {#if actor.conditions.length > 0}
+      {#if actor.conditions.length > 0 || actor.tags.length > 0}
         <div>
           {#each actor.conditions as cond}
             <span class="dnd-condition-chip">{cond}</span>
+          {/each}
+          {#each actor.tags as tag (tag.id)}
+            <span class="dnd-tag-chip" title={tag.note ?? ""}>{tag.name}</span>
           {/each}
         </div>
       {/if}

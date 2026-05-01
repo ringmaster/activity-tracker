@@ -108,6 +108,25 @@ export interface RemoveCombatantEntry {
   };
 }
 
+export interface ConditionEntry {
+  condition: {
+    by: string;
+    tgt: string[];
+    conditions: string[];
+    via?: string;
+  };
+}
+
+export interface TagEntry {
+  tag: {
+    by: string;
+    tgt: string[];
+    name: string;
+    note?: string;
+    via?: string;
+  };
+}
+
 export type LogEntry =
   | StartCombatEntry
   | EndCombatEntry
@@ -122,4 +141,6 @@ export type LogEntry =
   | DeathEntry
   | EffectEndsEntry
   | AddCombatantEntry
-  | RemoveCombatantEntry;
+  | RemoveCombatantEntry
+  | ConditionEntry
+  | TagEntry;

@@ -11,16 +11,16 @@ combatants:
       current: 65
       max: 65
     actions:
-      - name: Scimitar
+      - name: Flame Tongue Scimitar
         type: attack
-        dmg: [{dice: "1d6+3", type: slashing}]
+        dmg: [{dice: "1d6+3", type: slashing}, {dice: "2d6", type: fire}]
       - name: Dagger
         type: attack
         dmg: [{dice: "1d4+3", type: piercing}]
       - name: Multiattack
         type: attack
-        dmg: [{dice: "1d6+3", type: slashing}]
-        note: "Three melee attacks: two scimitars, one dagger"
+        dmg: [{dice: "1d6+3", type: slashing}, {dice: "2d6", type: fire}]
+        note: "Three melee attacks: two flame tongue scimitars, one dagger"
     behavior:
       motive: "Wants the party's goods; will negotiate if outmatched."
       priority: "Isolated targets first. Avoids heavy armor."

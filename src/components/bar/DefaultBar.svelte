@@ -54,6 +54,7 @@
   </button>
 
   <button class="dnd-bar-btn" onclick={() => setAction("attack")} title="Attack">&#9876;</button>
+  <button class="dnd-bar-btn" onclick={() => setAction("cast")} title="Cast">&#10024;</button>
   <button class="dnd-bar-btn" onclick={() => setAction("heal")} title="Heal">&#10084;</button>
   <button class="dnd-bar-btn" onclick={() => setAction("note")} title="Note">&#128221;</button>
 

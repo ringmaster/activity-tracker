@@ -1,0 +1,650 @@
+<script lang="ts">
+  import { MarkdownRenderer } from "obsidian";
+  import type { EncounterState } from "../../state/encounter-state.svelte";
+  import type { DamageComponent, AuthoredDamage, TagTrigger } from "../../types/encounter";
+  import { commitAttack, commitHeal } from "../../state/action-logger.svelte";
+  import { searchSpells, findSpell, type SrdSpell } from "../../data/spell-lookup";
+  import { generateSpellTag, generateConcentrationTag } from "../../data/spell-tag-generator";
+  import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
+  import DamageTypeIcon from "../shared/DamageTypeIcon.svelte";
+
+  type EffectType = "damage" | "condition" | "heal" | "tag" | "failed";
+
+  interface DamageEffect {
+    type: "damage";
+    amount: number;
+    damageType: string;
+  }
+
+  interface ConditionEffect {
+    type: "condition";
+    condition: string;
+  }
+
+  interface HealEffect {
+    type: "heal";
+    amount: number;
+  }
+
+  interface TagEffect {
+    type: "tag";
+    name: string;
+    note: string;
+    trigger: TagTrigger | "";
+  }
+
+  interface FailedEffect {
+    type: "failed";
+  }
+
+  type SpellEffect = DamageEffect | ConditionEffect | HealEffect | TagEffect | FailedEffect;
+
+  const COMMON_CONDITIONS = [
+    "blinded", "charmed", "deafened", "frightened", "grappled",
+    "incapacitated", "invisible", "paralyzed", "petrified",
+    "poisoned", "prone", "restrained", "stunned", "unconscious",
+    "downed", "dead",
+  ];
+
+  let { encounter, onDone, preset = "attack" }: {
+    encounter: EncounterState;
+    onDone: () => void;
+    /** "attack" starts with a damage effect and shows all actions.
+     *  "cast" starts empty and shows only spells.
+     *  "heal" starts with a heal effect. */
+    preset?: "attack" | "cast" | "heal";
+  } = $props();
+
+  let via = $state("");
+  // svelte-ignore state_referenced_locally
+  let showTargets = $state(preset === "attack");
+  let showViaSuggestions = $state(false);
+  let showEffectPicker = $state(false);
+
+  function closeAllDropdowns() {
+    showTargets = false;
+    showViaSuggestions = false;
+    showEffectPicker = false;
+  }
+  let spellKey = $state("");
+  let isConc = $state(false);
+  let isSpell = $state(false);
+  let diceHint = $state<string | null>(null);
+  let spellDesc = $state<string | null>(null);
+  let spellDescEl = $state<HTMLElement | null>(null);
+
+  // Render spell description as markdown when it changes
+  $effect(() => {
+    if (spellDescEl && spellDesc) {
+      spellDescEl.empty();
+      MarkdownRenderer.renderMarkdown(spellDesc, spellDescEl, "", null as any);
+    }
+  });
+
+  // svelte-ignore state_referenced_locally
+  let effects = $state<SpellEffect[]>(
+    preset === "attack"
+      ? [{ type: "damage", amount: 0, damageType: "" }]
+      : preset === "heal"
+        ? [{ type: "heal", amount: 0 }]
+        : [],
+  );
+
+  let targets = $state<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>({});
+
+  let cancelIcon = $derived(
+    preset === "attack" ? "\u2694" : preset === "cast" ? "\u2728" : "\u2764",
+  );
+
+  // --- Via suggestions ---
+
+  interface ActionSuggestion {
+    name: string;
+    authoredDmg?: AuthoredDamage[];
+    spellDmg?: DamageComponent[];
+    isSpell?: boolean;
+    spellKey?: string;
+    conc?: boolean;
+    srdSpell?: SrdSpell;
+  }
+
+  let availableActions = $derived.by((): ActionSuggestion[] => {
+    const actor = encounter.effectiveActor;
+    if (!actor) return [];
+    const results: ActionSuggestion[] = [];
+
+    // For attack preset, include weapon/ability actions
+    if (preset === "attack") {
+      if (actor.actions) {
+        for (const action of actor.actions) {
+          results.push({ name: action.name, authoredDmg: action.dmg });
+        }
+      }
+      if (actor.behavior?.extra_actions) {
+        for (const action of actor.behavior.extra_actions) {
+          results.push({ name: action.name, authoredDmg: action.dmg });
+        }
+      }
+    }
+
+    // All presets include the actor's spells
+    if (actor.spells) {
+      for (const entry of actor.spells) {
+        if (typeof entry === "string") {
+          const srd = findSpell(entry);
+          if (srd) {
+            results.push({
+              name: srd.name,
+              authoredDmg: srd.damageType ? [{ dice: srd.dice ?? "", type: srd.damageType }] : undefined,
+              isSpell: true, conc: srd.concentration, srdSpell: srd,
+            });
+          } else {
+            results.push({ name: entry, isSpell: true });
+          }
+        } else {
+          results.push({
+            name: entry.name, spellDmg: entry.dmg, isSpell: true,
+            spellKey: entry.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+            conc: entry.concentration,
+          });
+        }
+      }
+    }
+
+    return results;
+  });
+
+  let combinedSuggestions = $derived.by((): ActionSuggestion[] => {
+    const authoredMatches = via.length > 0
+      ? availableActions.filter((a) => a.name.toLowerCase().includes(via.toLowerCase()))
+      : availableActions;
+
+    if (via.length < 3) return authoredMatches;
+
+    const srdMatches = searchSpells(via);
+    const authoredNames = new Set(authoredMatches.map((a) => a.name.toLowerCase()));
+    const srdSuggestions: ActionSuggestion[] = srdMatches
+      .filter((s) => !authoredNames.has(s.name.toLowerCase()))
+      .map((s) => ({
+        name: s.name,
+        authoredDmg: s.damageType ? [{ dice: s.dice ?? "", type: s.damageType }] : undefined,
+        isSpell: true, conc: s.concentration, srdSpell: s,
+      }));
+
+    return [...authoredMatches, ...srdSuggestions];
+  });
+
+  let targetLabel = $derived.by(() => {
+    const checked = Object.entries(targets).filter(([_, t]) => t.checked);
+    const actorName = encounter.effectiveActor?.name ?? "?";
+    if (checked.length === 0) {
+      return preset === "attack" ? `${actorName} \u2192` : `${actorName} \u2192 Self`;
+    }
+    if (checked.length === 1) {
+      const c = encounter.getCombatant(checked[0][0]);
+      const name = c?.name ?? checked[0][0];
+      const ac = c?.ac != null ? ` (${c.ac})` : "";
+      return `\u2192 ${name}${ac}`;
+    }
+    return `\u2192 ${checked.length} targets`;
+  });
+
+  // --- Selection ---
+
+  let selectedSrdSpell = $state<SrdSpell | null>(null);
+
+  function selectAction(action: ActionSuggestion) {
+    via = action.name;
+    isSpell = !!action.isSpell;
+    selectedSrdSpell = action.srdSpell ?? null;
+
+    if (action.srdSpell) {
+      spellDesc = action.srdSpell.desc;
+      if (action.srdSpell.damageType && preset !== "heal") {
+        setDamageEffects([{ dice: "", type: action.srdSpell.damageType }]);
+      }
+      if (action.srdSpell.concentration) isConc = true;
+      // SRD spells show dice in the description; set hint from dice+type if available
+      diceHint = action.srdSpell.dice && action.srdSpell.damageType
+        ? `${action.srdSpell.dice} ${action.srdSpell.damageType}`
+        : null;
+
+      // Auto-generate a tag effect if the spell has ongoing effects
+      const autoTag = generateSpellTag(
+        action.srdSpell,
+        encounter.effectiveActor?.id ?? "",
+        [],
+      );
+      if (autoTag && autoTag.trigger) {
+        const existingTag = effects.find((e) => e.type === "tag") as TagEffect | undefined;
+        if (!existingTag) {
+          effects = [...effects, {
+            type: "tag",
+            name: autoTag.name,
+            note: autoTag.onTrigger ?? autoTag.note ?? "",
+            trigger: autoTag.trigger,
+          }];
+        }
+      }
+    } else {
+      spellDesc = null;
+      selectedSrdSpell = null;
+      // Build dice hint from authored damage
+      if (action.authoredDmg && action.authoredDmg.length > 0) {
+        const parts = action.authoredDmg
+          .filter((d) => d.dice)
+          .map((d) => `${d.dice} ${d.type}`);
+        diceHint = parts.length > 0 ? parts.join(" + ") : null;
+      } else {
+        diceHint = null;
+      }
+      const dmgSource = action.authoredDmg ?? action.spellDmg?.map((d) => ({ dice: "", type: d.type }));
+      if (dmgSource && dmgSource.length > 0 && preset !== "heal") {
+        setDamageEffects(dmgSource);
+      }
+      if (action.isSpell && action.spellKey) spellKey = action.spellKey;
+      if (action.conc) isConc = true;
+    }
+
+    showViaSuggestions = false;
+    focusFirstEffectInput();
+  }
+
+  /** Replace existing damage effects with ones matching the selected action's damage types. */
+  function setDamageEffects(dmgSource: { dice?: string; type: string }[]) {
+    // Remove existing damage effects
+    const nonDamage = effects.filter((e) => e.type !== "damage");
+    // Create new damage effects for each type (amount blank for manual entry)
+    const newDmg: DamageEffect[] = dmgSource.map((d) => ({
+      type: "damage",
+      amount: 0,
+      damageType: d.type,
+    }));
+    effects = [...newDmg, ...nonDamage];
+  }
+
+  function focusFirstEffectInput() {
+    requestAnimationFrame(() => {
+      const input = document.querySelector(".dnd-effect-amount") as HTMLInputElement | null;
+      input?.focus();
+    });
+  }
+
+  // --- Via input handlers ---
+
+  function handleViaInput(event: Event) {
+    via = (event.target as HTMLInputElement).value;
+    showTargets = false;
+    showEffectPicker = false;
+    showViaSuggestions = combinedSuggestions.length > 0;
+    spellDesc = null;
+    isSpell = false;
+    diceHint = null;
+  }
+
+  function handleViaFocus() {
+    showTargets = false;
+    showEffectPicker = false;
+    showViaSuggestions = combinedSuggestions.length > 0;
+  }
+
+  function handleViaBlur() {
+    setTimeout(() => { showViaSuggestions = false; }, 200);
+  }
+
+  // --- Effects ---
+
+  function addEffect(effectType: EffectType) {
+    if (effectType === "damage") {
+      effects = [...effects, { type: "damage", amount: 0, damageType: "" }];
+    } else if (effectType === "condition") {
+      effects = [...effects, { type: "condition", condition: "" }];
+    } else if (effectType === "heal") {
+      effects = [...effects, { type: "heal", amount: 0 }];
+    } else if (effectType === "tag") {
+      effects = [...effects, { type: "tag", name: via || "", note: "", trigger: "" }];
+    } else if (effectType === "failed") {
+      // Replace all existing effects with a single failed marker
+      effects = [{ type: "failed" }];
+    }
+    showEffectPicker = false;
+    focusFirstEffectInput();
+  }
+
+  function removeEffect(index: number) {
+    effects = effects.filter((_, i) => i !== index);
+  }
+
+  // --- Commit ---
+
+  function handleCommit() {
+    const actor = encounter.effectiveActor;
+    if (!actor) return;
+
+    let selectedTargets = Object.entries(targets)
+      .filter(([_, t]) => t.checked)
+      .map(([id, t]) => ({ who: id, outcome: t.outcome }));
+
+    // If no targets selected: attacks require a target; casts/heals default to self
+    if (selectedTargets.length === 0) {
+      if (preset === "attack") return;
+      selectedTargets = [{ who: actor.id, outcome: "full" as const }];
+    }
+
+    const isFailed = effects.some((e) => e.type === "failed");
+
+    // If failed, log the attempt with no effects applied
+    if (isFailed) {
+      const isSpellAction = isSpell || preset === "cast";
+      encounter.log.push({
+        attack: {
+          by: actor.id,
+          via: via || (preset === "attack" ? "attack" : "spell"),
+          spell: isSpellAction || undefined,
+          failed: true,
+          tgt: selectedTargets.map((t) => ({ who: t.who, hit: "zero" as const })),
+        },
+      } as any);
+
+      encounter.flush();
+      onDone();
+      return;
+    }
+
+    // Collect damage effects into baseDmg
+    const damageEffects = effects.filter((e) => e.type === "damage") as DamageEffect[];
+    const baseDmg: DamageComponent[] = damageEffects
+      .filter((d) => d.amount > 0)
+      .map((d) => ({ n: d.amount, type: d.damageType }));
+
+    // Apply healing effects
+    const healEffects = effects.filter((e) => e.type === "heal") as HealEffect[];
+    const totalHeal = healEffects.reduce((sum, h) => sum + h.amount, 0);
+
+    // Apply condition effects
+    const conditionEffects = effects.filter((e) => e.type === "condition") as ConditionEffect[];
+    const conditions = conditionEffects
+      .map((c) => c.condition)
+      .filter((c) => c.length > 0);
+
+    // Log as attack/spell if there's damage or it's a spell/attack action
+    if (baseDmg.length > 0 || preset === "attack" || preset === "cast") {
+      commitAttack(encounter, {
+        by: actor.id,
+        via: via || (preset === "attack" ? "attack" : "spell"),
+        baseDmg,
+        targets: selectedTargets,
+        spellKey: spellKey || undefined,
+        conc: isConc || undefined,
+        isSpell: isSpell || preset === "cast" || undefined,
+      });
+    }
+
+    // Apply healing to targets
+    if (totalHeal > 0) {
+      commitHeal(encounter, {
+        by: actor.id,
+        via: via || undefined,
+        targets: selectedTargets.map((t) => ({ who: t.who, hp: totalHeal })),
+      });
+    }
+
+    // Apply conditions to targets
+    if (conditions.length > 0) {
+      const affectedTargetIds = selectedTargets.map((t) => t.who);
+      for (const targetId of affectedTargetIds) {
+        const combatant = encounter.getCombatant(targetId);
+        if (!combatant) continue;
+        for (const condition of conditions) {
+          if (!combatant.conditions.includes(condition)) {
+            combatant.conditions.push(condition);
+          }
+          if (condition === "dead" && combatant.type === "npc" && combatant.hp) {
+            combatant.hp.current = 0;
+          }
+        }
+      }
+      encounter.log.push({
+        condition: {
+          by: actor.id,
+          tgt: affectedTargetIds,
+          conditions,
+          via: via || undefined,
+        },
+      });
+    }
+
+    // Apply tag effects to targets
+    const tagEffects = effects.filter((e) => e.type === "tag") as TagEffect[];
+    if (tagEffects.length > 0) {
+      const affectedTargetIds = selectedTargets.map((t) => t.who);
+      for (const targetId of affectedTargetIds) {
+        const combatant = encounter.getCombatant(targetId);
+        if (!combatant) continue;
+        for (const tagEffect of tagEffects) {
+          if (!tagEffect.name) continue;
+          combatant.tags.push({
+            id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            name: tagEffect.name,
+            source: actor.id,
+            note: tagEffect.note || undefined,
+            trigger: tagEffect.trigger || undefined,
+            onTrigger: tagEffect.note || undefined,
+            autoRemove: "manual",
+          });
+        }
+      }
+      // Log once per tag effect, not once per target
+      for (const tagEffect of tagEffects) {
+        if (!tagEffect.name) continue;
+        encounter.log.push({
+          tag: {
+            by: actor.id,
+            tgt: affectedTargetIds,
+            name: tagEffect.name,
+            note: tagEffect.note || undefined,
+            via: via || undefined,
+          },
+        });
+      }
+    }
+
+    // Auto-add concentration tag to the caster
+    if (isConc) {
+      const concTag = generateConcentrationTag(via, actor.id);
+      actor.tags.push(concTag);
+    }
+
+    encounter.flush();
+    onDone();
+  }
+</script>
+
+<div class="dnd-action-bar">
+  <button class="dnd-bar-btn active" onclick={onDone} title="Cancel">{cancelIcon}</button>
+
+  <button class="dnd-bar-btn" onclick={() => { const next = !showTargets; closeAllDropdowns(); showTargets = next; }}>
+    {targetLabel}
+  </button>
+
+  <input
+    type="text"
+    class="dnd-action-input medium dnd-via-input"
+    placeholder="via"
+    value={via}
+    oninput={handleViaInput}
+    onfocus={handleViaFocus}
+    onblur={handleViaBlur}
+  />
+
+  <!-- Effect widgets -->
+  {#each effects as effect, idx (idx)}
+    {#if effect.type === "damage"}
+      <div class="dnd-effect-widget">
+        <input
+          type="number"
+          inputmode="numeric"
+          class="dnd-action-input narrow dnd-effect-amount dnd-dmg-number"
+          placeholder="dmg"
+          value={effect.amount || ""}
+          oninput={(e) => { effect.amount = parseInt((e.target as HTMLInputElement).value, 10) || 0; }}
+          onkeydown={(e) => { if (e.key === "Enter") handleCommit(); }}
+        />
+        <DamageTypeIcon bind:value={effect.damageType} />
+        {#if effects.length > 1 || preset === "cast"}
+          <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
+        {/if}
+      </div>
+    {:else if effect.type === "heal"}
+      <div class="dnd-effect-widget">
+        <input
+          type="number"
+          inputmode="numeric"
+          class="dnd-action-input narrow dnd-effect-amount"
+          placeholder="HP"
+          value={effect.amount || ""}
+          oninput={(e) => { effect.amount = parseInt((e.target as HTMLInputElement).value, 10) || 0; }}
+          onkeydown={(e) => { if (e.key === "Enter") handleCommit(); }}
+        />
+        <span class="dnd-effect-label">heal</span>
+        {#if effects.length > 1 || preset === "cast"}
+          <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
+        {/if}
+      </div>
+    {:else if effect.type === "condition"}
+      <div class="dnd-effect-widget">
+        <select
+          class="dnd-action-input"
+          value={effect.condition}
+          onchange={(e) => { effect.condition = (e.target as HTMLSelectElement).value; }}
+        >
+          <option value="">condition...</option>
+          {#each COMMON_CONDITIONS as cond}
+            <option value={cond}>{cond}</option>
+          {/each}
+        </select>
+        {#if effects.length > 1 || preset === "cast"}
+          <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
+        {/if}
+      </div>
+    {:else if effect.type === "tag"}
+      <div class="dnd-effect-widget dnd-tag-widget">
+        <span class="dnd-effect-label">&#127991;</span>
+        <input
+          type="text"
+          class="dnd-action-input narrow"
+          placeholder="tag"
+          value={effect.name}
+          oninput={(e) => { effect.name = (e.target as HTMLInputElement).value; }}
+        />
+        <input
+          type="text"
+          class="dnd-action-input medium"
+          placeholder="reminder"
+          value={effect.note}
+          oninput={(e) => { effect.note = (e.target as HTMLInputElement).value; }}
+        />
+        <select
+          class="dnd-action-input"
+          style="min-width: 50px;"
+          value={effect.trigger}
+          onchange={(e) => { effect.trigger = (e.target as HTMLSelectElement).value as TagTrigger | ""; }}
+        >
+          <option value="">no trigger</option>
+          <option value="start_of_turn">start of turn</option>
+          <option value="end_of_turn">end of turn</option>
+          <option value="when_damaged">when damaged</option>
+        </select>
+        <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
+      </div>
+    {:else if effect.type === "failed"}
+      <div class="dnd-effect-widget dnd-failed-widget">
+        <span class="dnd-effect-label">{preset === "attack" ? "Miss" : "Failed"}</span>
+        <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
+      </div>
+    {/if}
+  {/each}
+
+  <!-- Add effect button -->
+  <div style="position: relative;">
+    <button
+      class="dnd-bar-btn"
+      onclick={() => { const next = !showEffectPicker; closeAllDropdowns(); showEffectPicker = next; }}
+      title="Add effect"
+    >+</button>
+    {#if showEffectPicker}
+      <div class="dnd-dropdown dnd-effect-picker">
+        <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("damage")}>
+          <span class="dnd-via-name">Damage</span>
+        </button>
+        <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("condition")}>
+          <span class="dnd-via-name">Condition</span>
+        </button>
+        <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("heal")}>
+          <span class="dnd-via-name">Heal</span>
+        </button>
+        <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("tag")}>
+          <span class="dnd-via-name">Tag</span>
+          <span class="dnd-via-detail">ongoing effect with reminder</span>
+        </button>
+        <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("failed")}>
+          <span class="dnd-via-name">{preset === "attack" ? "Miss" : "Failed"}</span>
+          <span class="dnd-via-detail">action has no effect</span>
+        </button>
+      </div>
+    {/if}
+  </div>
+
+  <button class="dnd-bar-btn active" onclick={handleCommit}>Commit</button>
+</div>
+
+{#if diceHint}
+  <div class="dnd-dice-hint">Roll: {diceHint}</div>
+{/if}
+
+{#if spellDesc}
+  <div class="dnd-spell-desc" bind:this={spellDescEl}></div>
+{/if}
+
+{#if showViaSuggestions && combinedSuggestions.length > 0}
+  <div class="dnd-dropdown" style="max-height: 240px;">
+    {#each combinedSuggestions as action}
+      <button
+        class="dnd-dropdown-row dnd-via-suggestion"
+        onmousedown={() => selectAction(action)}
+      >
+        <span class="dnd-via-name">{action.name}</span>
+        {#if action.authoredDmg && action.authoredDmg.length > 0}
+          <span class="dnd-via-detail">
+            {action.authoredDmg.map((d) => `${d.dice} ${d.type}`.trim()).join(" + ")}
+          </span>
+        {:else if action.spellDmg && action.spellDmg.length > 0}
+          <span class="dnd-via-detail">
+            {action.spellDmg.map((d) => `${d.n} ${d.type}`).join(" + ")}
+          </span>
+        {/if}
+        {#if action.isSpell}
+          <span class="dnd-via-badge">spell</span>
+        {/if}
+      </button>
+    {/each}
+  </div>
+{/if}
+
+{#if showTargets}
+  <TargetsDropdown
+    {encounter}
+    bind:selected={targets}
+    onClose={() => {
+      showTargets = false;
+      requestAnimationFrame(() => {
+        const viaInput = document.querySelector(".dnd-via-input") as HTMLInputElement | null;
+        viaInput?.focus();
+      });
+    }}
+    damageType={(() => {
+      const dmg = effects.find((e) => e.type === "damage") as DamageEffect | undefined;
+      return dmg?.damageType;
+    })()}
+  />
+{/if}

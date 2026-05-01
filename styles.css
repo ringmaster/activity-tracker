@@ -152,6 +152,18 @@
   font-weight: 600;
 }
 
+/* ---------- Dice hint ---------- */
+.dnd-dice-hint {
+  max-width: 768px;
+  width: 100%;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7eb8da;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
 /* ---------- Spell description ---------- */
 .dnd-spell-desc {
   max-width: 768px;
@@ -162,6 +174,61 @@
   color: #7eb8da;
   background: var(--background-secondary);
   border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dnd-spell-desc p {
+  margin: 2px 0;
+  color: #7eb8da;
+}
+
+.dnd-spell-desc strong {
+  color: #a0d0f0;
+}
+}
+
+/* ---------- Actor effects strip ---------- */
+.dnd-actor-effects {
+  max-width: 768px;
+  width: 100%;
+  padding: 4px 10px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dnd-actor-effect-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dnd-actor-effect-note {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.dnd-effect-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.dnd-effect-dismiss:active {
+  color: var(--text-error);
 }
 
 /* ---------- Turn log ---------- */
@@ -260,6 +327,22 @@
 
 .dnd-banner-btn.dismiss {
   background: var(--background-modifier-hover);
+}
+
+.dnd-spell-name-btn {
+  color: #7eb8da;
+  border-color: #2a4a5e;
+  font-style: italic;
+}
+
+.dnd-spell-name-btn.active {
+  background: #2a4a5e;
+  color: #a0d0f0;
+}
+
+.dnd-banner-spell-desc {
+  border-radius: 4px;
+  margin-top: 4px;
 }
 
 /* ---------- Inline view ---------- */
@@ -423,6 +506,24 @@
   margin: 0 0 8px 0;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+.dnd-disclosure-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 0;
+  margin-bottom: 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-normal);
+}
+
+.dnd-disclosure-arrow {
+  font-size: 11px;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -464,7 +565,7 @@
   color: var(--text-muted);
 }
 
-/* ---------- Conditions chips ---------- */
+/* ---------- Conditions and tag chips ---------- */
 .dnd-condition-chip {
   display: inline-flex;
   align-items: center;
@@ -474,6 +575,18 @@
   font-weight: 500;
   background: var(--background-modifier-hover);
   color: var(--text-muted);
+}
+
+.dnd-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #2a4a5e;
+  color: #7eb8da;
+  cursor: help;
   margin-left: 4px;
 }
 
@@ -624,6 +737,154 @@
   color: var(--text-on-accent);
   text-transform: uppercase;
   letter-spacing: 0.3px;
+}
+
+/* ---------- Effect widgets ---------- */
+.dnd-effect-widget {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+}
+
+.dnd-effect-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.dnd-effect-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.dnd-effect-remove:active {
+  color: var(--text-error);
+}
+
+.dnd-effect-picker {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 120px;
+}
+
+/* ---------- Damage type icons ---------- */
+.dnd-dmg-type-icon-wrapper {
+  display: inline-flex;
+}
+
+.dnd-dmg-type-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 4px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  cursor: pointer;
+}
+
+.dnd-dmg-type-btn:active {
+  background: var(--background-modifier-hover);
+}
+
+.dnd-dmg-type-text {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.dnd-dmg-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dnd-dmg-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.dnd-dmg-type-grid {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1002;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  padding: 6px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  min-width: 200px;
+}
+
+.dnd-dmg-type-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.dnd-dmg-type-option:active,
+.dnd-dmg-type-option.selected {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+/* Per-type icon colors */
+.dnd-dmg-icon[data-type="acid"] svg { fill: #7ec850; }
+.dnd-dmg-icon[data-type="bludgeoning"] svg { fill: #b0a090; }
+.dnd-dmg-icon[data-type="cold"] svg { fill: #88ccee; }
+.dnd-dmg-icon[data-type="fire"] svg { fill: #e86830; }
+.dnd-dmg-icon[data-type="force"] svg { fill: #c084fc; }
+.dnd-dmg-icon[data-type="lightning"] svg { fill: #f0d060; }
+.dnd-dmg-icon[data-type="necrotic"] svg { fill: #80c070; }
+.dnd-dmg-icon[data-type="piercing"] svg { fill: #c0c0c0; }
+.dnd-dmg-icon[data-type="poison"] svg { fill: #a0d048; }
+.dnd-dmg-icon[data-type="psychic"] svg { fill: #e080b0; }
+.dnd-dmg-icon[data-type="radiant"] svg { fill: #f0e068; }
+.dnd-dmg-icon[data-type="slashing"] svg { fill: #d0d0d0; }
+.dnd-dmg-icon[data-type="thunder"] svg { fill: #90a8d0; }
+
+.dnd-tag-widget {
+  border-color: #2a4a5e;
+}
+
+.dnd-failed-widget {
+  border-color: var(--text-error);
+}
+
+.dnd-failed-widget .dnd-effect-label {
+  color: var(--text-error);
+  font-weight: 600;
 }
 
 /* ---------- Combat over overlay ---------- */
