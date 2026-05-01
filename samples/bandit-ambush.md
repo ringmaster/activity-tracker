@@ -21,6 +21,19 @@ combatants:
         type: attack
         dmg: [{dice: "1d6+3", type: slashing}, {dice: "2d6", type: fire}]
         note: "Three melee attacks: two flame tongue scimitars, one dagger"
+      - name: Grapple
+        type: attack
+        note: "Athletics vs target's Athletics or Acrobatics. Target is grappled on success."
+        effect: "condition:grappled"
+      - name: Shapeshift
+        type: ability
+        note: "Transforms into a dire wolf (AC 14, HP 37, bite 2d6+3 piercing). Concentration. Equipment melds into new form."
+        effect: "tag:Shapeshifted"
+    spells:
+      - name: "Shapeshift"
+        type: buff
+        concentration: true
+        effect: "Dire wolf form; AC 14, HP 37, bite 2d6+3 piercing. Reverts when concentration drops or HP reaches 0."
     behavior:
       motive: "Wants the party's goods; will negotiate if outmatched."
       priority: "Isolated targets first. Avoids heavy armor."
@@ -30,6 +43,10 @@ combatants:
       notes: |
         Opens with Multiattack on the nearest PC.
         If two bandits drop, shouts for retreat.
+        Will Shapeshift into dire wolf if bloodied.
+      spell_preferences:
+        - when: "Bloodied"
+          cast: "Shapeshift"
   - name: Bandit
     type: npc
     statblock: Bandit
@@ -45,6 +62,10 @@ combatants:
       - name: Light Crossbow
         type: attack
         dmg: [{dice: "1d8+1", type: piercing}]
+      - name: Grapple
+        type: attack
+        note: "Athletics vs target's Athletics or Acrobatics. Target is grappled on success."
+        effect: "condition:grappled"
   - name: Bandit Mage
     type: npc
     statblock: "Bandit Mage"
