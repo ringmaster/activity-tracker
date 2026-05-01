@@ -23,7 +23,7 @@
 <div class="dnd-inline-view">
   <div class="dnd-inline-header">Encounter: {encounter.encounter}</div>
   <div class="dnd-inline-status">
-    Round {encounter.round} / Active
+    Round {encounter.viewingRound}/{encounter.round} &mdash; Active
     {#if encounter.allNPCsDead}
       <span class="dnd-combat-over"> &mdash; Combat Over!</span>
     {/if}

@@ -16,12 +16,26 @@
     return actor.name;
   });
 
+  // Disable back button only when viewing the very first turn in the log
   let isFirstTurn = $derived.by(() => {
     const log = encounter.log;
-    for (const entry of log) {
-      if ("start_turn" in entry) {
-        return (entry as any).start_turn.who === encounter.currentTurn;
+
+    // Use tracked index if valid
+    let currentTurnIdx = encounter.currentTurnLogIndex;
+    if (currentTurnIdx < 0 || currentTurnIdx >= log.length) {
+      for (let i = log.length - 1; i >= 0; i--) {
+        const entry = log[i] as any;
+        if (entry.start_turn && entry.start_turn.who === encounter.currentTurn) {
+          currentTurnIdx = i;
+          break;
+        }
       }
+    }
+    if (currentTurnIdx < 0) return true;
+
+    // Check if there's any start_turn before this one
+    for (let i = currentTurnIdx - 1; i >= 0; i--) {
+      if ("start_turn" in log[i]) return false;
     }
     return true;
   });

@@ -29,6 +29,8 @@ export class EncounterState {
   // Transient bar state (not persisted to YAML)
   swappedActor = $state<string | null>(null);
   activeAction = $state<string | null>(null);
+  /** Index of the start_turn log entry we're currently viewing. -1 = derive from currentTurn. */
+  currentTurnLogIndex = $state<number>(-1);
 
   // Derived values
   sortedCombatants = $derived(
@@ -58,6 +60,19 @@ export class EncounterState {
       this.combatants.filter((c) => c.type === "npc").length > 0 &&
       this.livingNPCs.length === 0,
   );
+
+  /** The round number of the currently viewed turn (derived from log position). */
+  viewingRound = $derived.by(() => {
+    const logIdx = this.currentTurnLogIndex;
+    if (logIdx < 0) return this.round;
+
+    // Scan backwards from the current turn to find the nearest start_round
+    for (let i = logIdx; i >= 0; i--) {
+      const entry = this.log[i] as any;
+      if (entry.start_round) return entry.start_round.n;
+    }
+    return 1;
+  });
 
   /** Called when the encounter deactivates so the plugin can hide the bar. */
   onDeactivate: (() => void) | null = null;

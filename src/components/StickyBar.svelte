@@ -91,21 +91,30 @@
     return banners;
   });
 
-  // Current turn's action log
+  // Current turn's action log, using the tracked log index
   let turnLog = $derived.by(() => {
     const log = encounter.log;
     const who = encounter.currentTurn;
     if (log.length === 0 || !who) return [];
 
-    let turnStartIdx = -1;
-    for (let i = log.length - 1; i >= 0; i--) {
-      const entry = log[i] as any;
-      if (entry.start_turn && entry.start_turn.who === who) {
-        turnStartIdx = i;
-        break;
+    // Use the tracked index if valid; otherwise find by searching
+    let turnStartIdx = encounter.currentTurnLogIndex;
+    if (turnStartIdx < 0 || turnStartIdx >= log.length) {
+      for (let i = log.length - 1; i >= 0; i--) {
+        const entry = log[i] as any;
+        if (entry.start_turn && entry.start_turn.who === who) {
+          turnStartIdx = i;
+          break;
+        }
       }
     }
     if (turnStartIdx < 0) return [];
+
+    // Verify the index points to the right actor
+    const startEntry = log[turnStartIdx] as any;
+    if (!startEntry?.start_turn || startEntry.start_turn.who !== who) {
+      return [];
+    }
 
     const entries: string[] = [];
     for (let i = turnStartIdx + 1; i < log.length; i++) {

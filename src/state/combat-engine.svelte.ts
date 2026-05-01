@@ -140,15 +140,17 @@ export function nextTurn(state: EncounterState): void {
   // Clear any actor swap
   state.swappedActor = null;
 
+  // Find our current position in the log
+  const currentLogIdx = resolveCurrentTurnLogIndex(state);
+
   // Check if there's a later start_turn in the log we can navigate to
-  const currentTurnLogIdx = findLastStartTurn(state.log, state.currentTurn!);
-  if (currentTurnLogIdx >= 0) {
-    // Look for the next start_turn after the current one
-    for (let i = currentTurnLogIdx + 1; i < state.log.length; i++) {
+  if (currentLogIdx >= 0) {
+    for (let i = currentLogIdx + 1; i < state.log.length; i++) {
       const entry = state.log[i] as any;
       if (entry.start_turn) {
         // Replaying history; just move the cursor
         state.currentTurn = entry.start_turn.who;
+        state.currentTurnLogIndex = i;
         state.flushNow();
         return;
       }
@@ -191,6 +193,7 @@ export function nextTurn(state: EncounterState): void {
       at: nowTimestamp(),
     },
   });
+  state.currentTurnLogIndex = state.log.length - 1;
 
   // Reset legendary actions for NPCs at the start of their turn
   const actor = sorted[nextIdx];
@@ -199,6 +202,24 @@ export function nextTurn(state: EncounterState): void {
   }
 
   state.flushNow();
+}
+
+/**
+ * Resolve the current log index. If currentTurnLogIndex is set and valid, use it.
+ * Otherwise fall back to finding the last start_turn for the current actor.
+ */
+function resolveCurrentTurnLogIndex(state: EncounterState): number {
+  // Check if the stored index is still valid
+  if (state.currentTurnLogIndex >= 0 && state.currentTurnLogIndex < state.log.length) {
+    const entry = state.log[state.currentTurnLogIndex] as any;
+    if (entry.start_turn && entry.start_turn.who === state.currentTurn) {
+      return state.currentTurnLogIndex;
+    }
+  }
+  // Fall back: find the last start_turn for the current actor
+  const idx = findLastStartTurn(state.log, state.currentTurn!);
+  state.currentTurnLogIndex = idx;
+  return idx;
 }
 
 /** Find the index of the last start_turn entry for a given combatant. */
@@ -210,39 +231,23 @@ function findLastStartTurn(log: any[], who: string): number {
   return -1;
 }
 
-/** Go back to the previous turn (navigation only, does not undo actions). */
+/** Go back to the previous turn by walking the log history. */
 export function prevTurn(state: EncounterState): void {
-  const sorted = state.sortedCombatants;
-  const currentIdx = sorted.findIndex((c) => c.id === state.currentTurn);
-  if (currentIdx < 0) return;
-
-  // Clear any actor swap
   state.swappedActor = null;
 
-  let prevIdx = currentIdx - 1;
+  const currentLogIdx = resolveCurrentTurnLogIndex(state);
+  if (currentLogIdx < 0) return;
 
-  // Find previous living combatant, wrapping around
-  let wrapped = false;
-  while (true) {
-    if (prevIdx < 0) {
-      prevIdx = sorted.length - 1;
-      wrapped = true;
+  // Find the start_turn immediately before our current position
+  for (let i = currentLogIdx - 1; i >= 0; i--) {
+    const entry = state.log[i] as any;
+    if (entry.start_turn) {
+      state.currentTurn = entry.start_turn.who;
+      state.currentTurnLogIndex = i;
+      state.flushNow();
+      return;
     }
-    if (!sorted[prevIdx].conditions.includes("dead")) break;
-    prevIdx--;
-    if (prevIdx < 0) {
-      prevIdx = sorted.length - 1;
-      wrapped = true;
-    }
-    if (prevIdx === currentIdx) break;
   }
-
-  if (wrapped && prevIdx >= currentIdx && state.round > 1) {
-    state.round--;
-  }
-
-  state.currentTurn = sorted[prevIdx].id;
-  state.flushNow();
 }
 
 /** End the encounter. */
