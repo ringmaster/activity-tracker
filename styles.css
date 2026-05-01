@@ -962,9 +962,16 @@
   cursor: pointer;
 }
 
-.dnd-dmg-type-option .dnd-dmg-icon {
-  width: 32px !important;
-  height: 32px !important;
+/* Icon in the action bar button */
+.dnd-dmg-icon-btn {
+  width: 20px;
+  height: 20px;
+}
+
+/* Icon in the picker grid -- large for touch */
+.dnd-dmg-icon-grid {
+  width: 32px;
+  height: 32px;
 }
 
 .dnd-dmg-type-option:active,
@@ -990,6 +997,15 @@
 
 .dnd-tag-widget {
   border-color: #2a4a5e;
+}
+
+.dnd-conc-widget {
+  border-color: #a080e0;
+}
+
+.dnd-conc-widget .dnd-effect-label {
+  color: #a080e0;
+  font-weight: 600;
 }
 
 .dnd-failed-widget {

@@ -8,7 +8,7 @@
   import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
   import DamageTypeIcon from "../shared/DamageTypeIcon.svelte";
 
-  type EffectType = "damage" | "condition" | "heal" | "tag" | "failed";
+  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "failed";
 
   interface DamageEffect {
     type: "damage";
@@ -33,11 +33,15 @@
     trigger: TagTrigger | "";
   }
 
+  interface ConcentrationEffect {
+    type: "concentration";
+  }
+
   interface FailedEffect {
     type: "failed";
   }
 
-  type SpellEffect = DamageEffect | ConditionEffect | HealEffect | TagEffect | FailedEffect;
+  type SpellEffect = DamageEffect | ConditionEffect | HealEffect | TagEffect | ConcentrationEffect | FailedEffect;
 
   const COMMON_CONDITIONS = [
     "blinded", "charmed", "deafened", "frightened", "grappled",
@@ -328,6 +332,12 @@
       effects = [...effects, { type: "heal", amount: 0 }];
     } else if (effectType === "tag") {
       effects = [...effects, { type: "tag", name: via || "", note: "", trigger: "" }];
+    } else if (effectType === "concentration") {
+      // Only one concentration effect makes sense
+      if (!effects.some((e) => e.type === "concentration")) {
+        effects = [...effects, { type: "concentration" }];
+        isConc = true;
+      }
     } else if (effectType === "failed") {
       // Replace all existing effects with a single failed marker
       effects = [{ type: "failed" }];
@@ -582,6 +592,11 @@
         </select>
         <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
       </div>
+    {:else if effect.type === "concentration"}
+      <div class="dnd-effect-widget dnd-conc-widget">
+        <span class="dnd-effect-label">Conc</span>
+        <button class="dnd-effect-remove" onclick={() => { removeEffect(idx); isConc = false; }}>&times;</button>
+      </div>
     {:else if effect.type === "failed"}
       <div class="dnd-effect-widget dnd-failed-widget">
         <span class="dnd-effect-label">{preset === "attack" ? "Miss" : "Failed"}</span>
@@ -611,6 +626,10 @@
         <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("tag")}>
           <span class="dnd-via-name">Tag</span>
           <span class="dnd-via-detail">ongoing effect with reminder</span>
+        </button>
+        <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("concentration")}>
+          <span class="dnd-via-name">Concentration</span>
+          <span class="dnd-via-detail">caster must concentrate</span>
         </button>
         <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("failed")}>
           <span class="dnd-via-name">{preset === "attack" ? "Miss" : "Failed"}</span>

@@ -223,9 +223,20 @@ export default class ActivityTrackerPlugin extends Plugin {
       return;
     }
 
+    // Clean up old component FIRST to avoid reactive cascades
+    // when loadFromData mutates state that the old component is subscribed to.
+    const oldComponent = this.inlineComponents.get(el);
+    if (oldComponent) {
+      try {
+        unmount(oldComponent);
+      } catch {
+        // Ignore
+      }
+      this.inlineComponents.delete(el);
+    }
+
     // Reuse or create encounter state.
-    // Always reload from the parsed YAML so the in-memory state
-    // stays in sync with the file (e.g., active flag, round, log).
+    // Reload from parsed YAML so in-memory state stays in sync.
     let state = this.encounterStates.get(key);
     if (state) {
       state.updateSectionBounds(sectionInfo.lineStart, sectionInfo.lineEnd);
@@ -241,16 +252,6 @@ export default class ActivityTrackerPlugin extends Plugin {
       state.onDeactivate = () => this.hideBar();
       state.partyNotePath = this.settings.partyNotePath;
       this.encounterStates.set(key, state);
-    }
-
-    // Clean up old component if re-rendered
-    const oldComponent = this.inlineComponents.get(el);
-    if (oldComponent) {
-      try {
-        unmount(oldComponent);
-      } catch {
-        // Ignore
-      }
     }
 
     // Detect view mode. On mobile, getMode() may not be available immediately.

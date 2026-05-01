@@ -74,7 +74,7 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
 
   // Persist new via+type as an action on the actor for future autocomplete
   if (!params.spellKey) {
-    learnAction(state, params.by, params.via, params.baseDmg);
+    learnAction(state, params.by, params.via, params.baseDmg, params.isSpell, params.conc);
   }
 
   state.flush();
@@ -146,6 +146,8 @@ function learnAction(
   actorId: string,
   via: string,
   dmgComponents: DamageComponent[],
+  isSpellAction?: boolean,
+  concentration?: boolean,
 ): void {
   const actor = state.getCombatant(actorId);
   if (!actor || !via) return;
@@ -166,9 +168,30 @@ function learnAction(
     if (!actor.spells) actor.spells = [];
     actor.spells.push(srd.name);
 
-    // Persist to party file for PCs
     if (actor.type === "pc") {
       updatePartyMember(state.app, state.partyNotePath, actor.id, undefined, [srd.name]);
+    }
+    return;
+  }
+
+  // Spells that aren't in the SRD get stored as full spell objects on the combatant
+  if (isSpellAction) {
+    if (!actor.spells) actor.spells = [];
+    const types = dmgComponents.filter((d) => d.type);
+    const spellDef: any = {
+      name: via,
+      type: "attack",
+    };
+    if (types.length > 0) {
+      spellDef.dmg = types.map((d) => ({ n: d.n, type: d.type }));
+    }
+    if (concentration) {
+      spellDef.concentration = true;
+    }
+    actor.spells.push(spellDef);
+
+    if (actor.type === "pc") {
+      updatePartyMember(state.app, state.partyNotePath, actor.id, undefined, [via]);
     }
     return;
   }
