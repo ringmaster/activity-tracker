@@ -1063,6 +1063,22 @@
   color: var(--text-accent);
 }
 
+/* ---------- Debug overlay ---------- */
+.dnd-debug-overlay {
+  margin-top: 8px;
+  padding: 8px;
+  background: #1a1a2e;
+  color: #44ff44;
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.3;
+  border: 1px solid #333;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
 /* ---------- Combat over overlay ---------- */
 .dnd-combat-over {
   text-align: center;

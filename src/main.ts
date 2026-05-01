@@ -18,12 +18,47 @@ import { expandCombatants } from "./utils/id-generator";
 interface ActivityTrackerSettings {
   partyNotePath: string;
   codeBlockLanguage: string;
+  debugOverlay: boolean;
 }
 
 const DEFAULT_SETTINGS: ActivityTrackerSettings = {
   partyNotePath: "party.md",
   codeBlockLanguage: "dnd-combat",
+  debugOverlay: false,
 };
+
+/** Diagnostic log visible in the code block when debug overlay is enabled. */
+class DebugLog {
+  private entries: string[] = [];
+  private el: HTMLElement | null = null;
+  enabled = false;
+
+  log(msg: string) {
+    const ts = new Date().toLocaleTimeString();
+    this.entries.push(`[${ts}] ${msg}`);
+    if (this.entries.length > 50) this.entries.shift();
+    this.render();
+  }
+
+  attach(parent: HTMLElement) {
+    if (!this.enabled) return;
+    if (!this.el) {
+      this.el = document.createElement("div");
+      this.el.className = "dnd-debug-overlay";
+    }
+    parent.appendChild(this.el);
+    this.render();
+  }
+
+  detach() {
+    this.el?.remove();
+  }
+
+  private render() {
+    if (!this.el || !this.enabled) return;
+    this.el.textContent = this.entries.join("\n");
+  }
+}
 
 export default class ActivityTrackerPlugin extends Plugin {
   settings: ActivityTrackerSettings = DEFAULT_SETTINGS;
@@ -34,6 +69,9 @@ export default class ActivityTrackerPlugin extends Plugin {
   /** Mounted inline Svelte components keyed by element */
   private inlineComponents = new Map<HTMLElement, ReturnType<typeof mount>>();
 
+  /** Debug diagnostic log */
+  private debug = new DebugLog();
+
   /** The sticky bar DOM container and its Svelte component */
   private barContainer: HTMLDivElement | null = null;
   private barComponent: ReturnType<typeof mount> | null = null;
@@ -41,7 +79,10 @@ export default class ActivityTrackerPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+    this.debug.enabled = this.settings.debugOverlay;
     this.addSettingTab(new ActivityTrackerSettingTab(this.app, this));
+
+    this.debug.log(`onload: platform=${navigator.userAgent.includes("Mobile") ? "mobile" : "desktop"}`);
 
     // Register the code block processor
     this.registerMarkdownCodeBlockProcessor(
@@ -114,11 +155,20 @@ export default class ActivityTrackerPlugin extends Plugin {
     el: HTMLElement,
     ctx: MarkdownPostProcessorContext,
   ) {
+    this.debug.log(`processCodeBlock: sourcePath=${ctx.sourcePath}`);
+
     const sectionInfo = ctx.getSectionInfo(el);
-    if (!sectionInfo) return;
+    if (!sectionInfo) {
+      this.debug.log("processCodeBlock: sectionInfo is null, aborting");
+      this.debug.attach(el);
+      return;
+    }
 
     const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
-    if (!file || !(file instanceof TFile)) return;
+    if (!file || !(file instanceof TFile)) {
+      this.debug.log(`processCodeBlock: file not found for ${ctx.sourcePath}`);
+      return;
+    }
 
     const key = `${ctx.sourcePath}::${sectionInfo.lineStart}`;
 
@@ -174,6 +224,7 @@ export default class ActivityTrackerPlugin extends Plugin {
     // Detect view mode. On mobile, getMode() may not be available immediately.
     // Fall back to checking DOM classes once the element is attached.
     const isReadingView = this.isReadingView(el);
+    this.debug.log(`processCodeBlock: isReadingView=${isReadingView}, active=${state.active}, key=${key}`);
 
     // Mount InlineView
     const component = mount(InlineView, {
@@ -186,6 +237,7 @@ export default class ActivityTrackerPlugin extends Plugin {
       },
     });
     this.inlineComponents.set(el, component);
+    this.debug.attach(el);
 
     // Register cleanup via a proper MarkdownRenderChild
     const cleanup = new MarkdownRenderChild(el);
@@ -209,6 +261,7 @@ export default class ActivityTrackerPlugin extends Plugin {
   }
 
   private bindBar(state: EncounterState) {
+    this.debug.log(`bindBar: barContainer=${!!this.barContainer}`);
     if (!this.barContainer) return;
 
     // Deactivate other encounters
@@ -250,14 +303,16 @@ export default class ActivityTrackerPlugin extends Plugin {
     if (!this.barContainer) return;
 
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!view) return;
+    if (!view) {
+      this.debug.log("ensureBarInLeaf: no MarkdownView found");
+      return;
+    }
 
-    // Insert into .view-content, before the scrollable area.
-    // This places it below the view header (tab bar / breadcrumbs)
-    // but above the note content.
     const viewContent = view.contentEl;
+    this.debug.log(`ensureBarInLeaf: contentEl=${!!viewContent}, tag=${viewContent?.tagName}, classes=${viewContent?.className?.slice(0, 60)}`);
     if (viewContent && this.barContainer.parentElement !== viewContent) {
       viewContent.prepend(this.barContainer);
+      this.debug.log("ensureBarInLeaf: prepended bar to contentEl");
     }
   }
 
@@ -277,33 +332,44 @@ export default class ActivityTrackerPlugin extends Plugin {
     if (activeView) {
       try {
         const mode = activeView.getMode?.();
+        this.debug.log(`isReadingView: API mode=${mode}`);
         if (mode === "preview") return true;
         if (mode === "source") return false;
-      } catch {
-        // getMode may not exist on all platforms
+      } catch (e) {
+        this.debug.log(`isReadingView: getMode threw: ${e}`);
       }
+    } else {
+      this.debug.log("isReadingView: no MarkdownView from API");
     }
 
     // Strategy 2: DOM class check (works after element is attached)
     if (el) {
-      if (el.closest(".markdown-reading-view")) return true;
-      if (el.closest(".markdown-source-view")) return false;
+      const hasReading = !!el.closest(".markdown-reading-view");
+      const hasSource = !!el.closest(".markdown-source-view");
+      this.debug.log(`isReadingView: DOM check reading=${hasReading} source=${hasSource} inDoc=${el.isConnected}`);
+      if (hasReading) return true;
+      if (hasSource) return false;
     }
 
     // Strategy 3: Check the active leaf's view container
     if (activeView) {
       const container = activeView.containerEl;
-      if (container?.querySelector(".markdown-reading-view")) return true;
-      if (container?.querySelector(".markdown-source-view")) return false;
+      const hasReading = !!container?.querySelector(".markdown-reading-view");
+      const hasSource = !!container?.querySelector(".markdown-source-view");
+      this.debug.log(`isReadingView: container check reading=${hasReading} source=${hasSource}`);
+      if (hasReading) return true;
+      if (hasSource) return false;
     }
 
     // Default: assume reading view (safer for mobile where detection may fail)
+    this.debug.log("isReadingView: all strategies failed, defaulting to true");
     return true;
   }
 
   private updateBarVisibility() {
-    // Only show the bar in reading view
-    if (!this.isReadingView()) {
+    const isReading = this.isReadingView();
+    this.debug.log(`updateBarVisibility: isReading=${isReading}`);
+    if (!isReading) {
       this.hideBar();
       return;
     }
@@ -375,6 +441,21 @@ class ActivityTrackerSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.codeBlockLanguage)
           .onChange(async (value) => {
             this.plugin.settings.codeBlockLanguage = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Debug overlay")
+      .setDesc(
+        "Show a diagnostic log inside encounter code blocks (for troubleshooting)",
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.debugOverlay)
+          .onChange(async (value) => {
+            this.plugin.settings.debugOverlay = value;
+            this.plugin.debug.enabled = value;
             await this.plugin.saveSettings();
           }),
       );
