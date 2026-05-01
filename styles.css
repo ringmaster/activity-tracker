@@ -455,6 +455,11 @@
 .dnd-action-icon svg {
   width: 100%;
   height: 100%;
+  display: block;
+}
+
+.dnd-action-icon svg path {
+  fill: inherit;
 }
 
 .dnd-icon-cast svg { fill: #a080e0; }
@@ -473,6 +478,11 @@
 .dnd-move-icon svg {
   width: 100%;
   height: 100%;
+  display: block;
+}
+
+.dnd-move-icon svg path {
+  fill: inherit;
 }
 
 .dnd-icon-closes svg { fill: #60c060; }
@@ -915,6 +925,12 @@
 .dnd-dmg-icon svg {
   width: 100%;
   height: 100%;
+  display: block;
+}
+
+/* Ensure SVG paths inherit fill from parent rules */
+.dnd-dmg-icon svg path {
+  fill: inherit;
 }
 
 .dnd-dmg-type-grid {

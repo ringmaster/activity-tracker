@@ -70,8 +70,11 @@ export default class ActivityTrackerPlugin extends Plugin {
 
     // On plugin load, the workspace may already be showing a note with
     // an active encounter. Wait for layout to be ready, then check.
+    // Multiple retries for mobile Obsidian which may settle slowly.
     this.app.workspace.onLayoutReady(() => {
       setTimeout(() => this.updateBarVisibility(), 200);
+      setTimeout(() => this.updateBarVisibility(), 1000);
+      setTimeout(() => this.updateBarVisibility(), 3000);
     });
   }
 
@@ -171,11 +174,9 @@ export default class ActivityTrackerPlugin extends Plugin {
       }
     }
 
-    // Detect view mode: the code block processor el isn't in the DOM yet,
-    // so check the active leaf's view type via the workspace API.
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-    const viewMode = activeView?.getMode?.() ?? "preview";
-    const isReadingView = viewMode === "preview"; // "preview" = reading, "source" = edit/live preview
+    // Detect view mode. On mobile, getMode() may not be available immediately.
+    // Fall back to checking DOM classes once the element is attached.
+    const isReadingView = this.isReadingView(el);
 
     // Mount InlineView
     const component = mount(InlineView, {
@@ -204,12 +205,12 @@ export default class ActivityTrackerPlugin extends Plugin {
     };
     ctx.addChild(cleanup);
 
-    // If this encounter is active, schedule a visibility check.
-    // updateBarVisibility handles the reading-view-only guard.
-    // Use a longer delay to ensure the view mode has settled after
-    // plugin reload or view switches.
+    // If this encounter is active, schedule visibility checks.
+    // Multiple retries because mobile Obsidian may take longer to settle.
     if (state.active) {
-      setTimeout(() => this.updateBarVisibility(), 150);
+      setTimeout(() => this.updateBarVisibility(), 100);
+      setTimeout(() => this.updateBarVisibility(), 500);
+      setTimeout(() => this.updateBarVisibility(), 1500);
     }
   }
 
@@ -274,10 +275,41 @@ export default class ActivityTrackerPlugin extends Plugin {
     }
   }
 
+  /** Check if the current view is reading mode. Uses multiple detection strategies
+   *  for compatibility with desktop and mobile Obsidian. */
+  private isReadingView(el?: HTMLElement): boolean {
+    // Strategy 1: Obsidian API
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (activeView) {
+      try {
+        const mode = activeView.getMode?.();
+        if (mode === "preview") return true;
+        if (mode === "source") return false;
+      } catch {
+        // getMode may not exist on all platforms
+      }
+    }
+
+    // Strategy 2: DOM class check (works after element is attached)
+    if (el) {
+      if (el.closest(".markdown-reading-view")) return true;
+      if (el.closest(".markdown-source-view")) return false;
+    }
+
+    // Strategy 3: Check the active leaf's view container
+    if (activeView) {
+      const container = activeView.containerEl;
+      if (container?.querySelector(".markdown-reading-view")) return true;
+      if (container?.querySelector(".markdown-source-view")) return false;
+    }
+
+    // Default: assume reading view (safer for mobile where detection may fail)
+    return true;
+  }
+
   private updateBarVisibility() {
     // Only show the bar in reading view
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!activeView || activeView.getMode() !== "preview") {
+    if (!this.isReadingView()) {
       this.hideBar();
       return;
     }
