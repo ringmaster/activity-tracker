@@ -4,6 +4,7 @@
   let { combatant, isCurrent = false }: { combatant: Combatant; isCurrent?: boolean } = $props();
 
   let isDead = $derived(combatant.conditions.includes("dead"));
+  let isFled = $derived(combatant.conditions.includes("fled"));
 
   let hpDisplay = $derived.by(() => {
     if (combatant.type === "npc" && combatant.hp) {
@@ -38,14 +39,17 @@
   class="dnd-combatant-row"
   class:current={isCurrent}
   class:dead={isDead}
+  class:fled={isFled}
 >
   <span class="dnd-combatant-caret">{isCurrent ? "\u25B6" : ""}</span>
   <span class="dnd-combatant-name">
     {combatant.name}
     {#if isDead}
       <span class="dnd-combatant-tag">DEAD</span>
+    {:else if isFled}
+      <span class="dnd-combatant-tag fled">FLED</span>
     {/if}
-    {#each combatant.conditions.filter(c => c !== "dead") as cond}
+    {#each combatant.conditions.filter(c => c !== "dead" && c !== "fled") as cond}
       <span class="dnd-condition-chip">{cond}</span>
     {/each}
     {#each combatant.tags as tag (tag.id)}

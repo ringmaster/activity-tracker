@@ -162,7 +162,7 @@ export function resolveObligation(
 
     if (effectiveDisposition === "dismiss") {
       state.activeObligations.splice(obIdx, 1);
-      state.log.push({
+      state.logInsert({
         effect_ends: {
           what: ob.spell,
           on: ob.tgt[0] ?? "unknown",

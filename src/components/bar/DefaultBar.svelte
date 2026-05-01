@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import { nextTurn, prevTurn } from "../../state/combat-engine.svelte";
+  import { ACTION_ICONS } from "../../icons/action-icons";
   import ActorDropdown from "../dropdowns/ActorDropdown.svelte";
 
   let { encounter }: { encounter: EncounterState } = $props();
@@ -68,8 +69,9 @@
   </button>
 
   <button class="dnd-bar-btn" onclick={() => setAction("attack")} title="Attack">&#9876;</button>
-  <button class="dnd-bar-btn" onclick={() => setAction("cast")} title="Cast">&#10024;</button>
-  <button class="dnd-bar-btn" onclick={() => setAction("heal")} title="Heal">&#10084;</button>
+  <button class="dnd-bar-btn" onclick={() => setAction("cast")} title="Cast"><span class="dnd-action-icon dnd-icon-cast">{@html ACTION_ICONS.cast}</span></button>
+  <button class="dnd-bar-btn" onclick={() => setAction("heal")} title="Heal"><span class="dnd-action-icon dnd-icon-heal">&#10084;</span></button>
+  <button class="dnd-bar-btn" onclick={() => setAction("move")} title="Move"><span class="dnd-action-icon dnd-icon-move">{@html ACTION_ICONS.move}</span></button>
   <button class="dnd-bar-btn" onclick={() => setAction("note")} title="Note">&#128221;</button>
 
   <button class="dnd-bar-btn" onclick={handleNext} title="Next turn">&#9654;</button>

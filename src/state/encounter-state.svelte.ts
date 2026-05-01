@@ -48,7 +48,9 @@ export class EncounterState {
   );
 
   livingCombatants = $derived(
-    this.sortedCombatants.filter((c) => !c.conditions.includes("dead")),
+    this.sortedCombatants.filter((c) =>
+      !c.conditions.includes("dead") && !c.conditions.includes("fled"),
+    ),
   );
 
   livingNPCs = $derived(
@@ -127,6 +129,35 @@ export class EncounterState {
   /** Get a combatant by ID. */
   getCombatant(id: string): Combatant | undefined {
     return this.combatants.find((c) => c.id === id);
+  }
+
+  /**
+   * Insert a log entry at the correct position for the currently viewed turn.
+   * If viewing the latest turn, appends to the end.
+   * If viewing a historical turn, inserts before the next start_turn.
+   */
+  logInsert(entry: LogEntry): void {
+    const idx = this.currentTurnLogIndex;
+
+    // If no valid index or viewing the latest turn segment, just append
+    if (idx < 0) {
+      this.log.push(entry);
+      return;
+    }
+
+    // Find the end of the current turn's segment (next start_turn or end of log)
+    let insertAt = this.log.length;
+    for (let i = idx + 1; i < this.log.length; i++) {
+      if ("start_turn" in this.log[i]) {
+        insertAt = i;
+        break;
+      }
+    }
+
+    this.log.splice(insertAt, 0, entry);
+
+    // Adjust currentTurnLogIndex if needed (the index itself doesn't shift
+    // since we insert after it, but later indices do shift)
   }
 
   /** Find a fully-specified spell definition by name, searching all combatants. */

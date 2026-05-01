@@ -250,14 +250,15 @@
     focusFirstEffectInput();
   }
 
-  /** Replace existing damage effects with ones matching the selected action's damage types. */
+  /** Replace existing damage effects with ones matching the selected action's damage types.
+   *  Preserves amounts already entered by the user. */
   function setDamageEffects(dmgSource: { dice?: string; type: string }[]) {
-    // Remove existing damage effects
+    const existingDmg = effects.filter((e) => e.type === "damage") as DamageEffect[];
     const nonDamage = effects.filter((e) => e.type !== "damage");
-    // Create new damage effects for each type (amount blank for manual entry)
-    const newDmg: DamageEffect[] = dmgSource.map((d) => ({
+
+    const newDmg: DamageEffect[] = dmgSource.map((d, i) => ({
       type: "damage",
-      amount: 0,
+      amount: existingDmg[i]?.amount ?? 0,
       damageType: d.type,
     }));
     effects = [...newDmg, ...nonDamage];
@@ -273,7 +274,31 @@
   // --- Via input handlers ---
 
   function handleViaInput(event: Event) {
-    via = (event.target as HTMLInputElement).value;
+    const input = event.target as HTMLInputElement;
+    const val = input.value;
+
+    // If the typed value is a number, move it to the first damage field
+    if (/^\d+$/.test(val)) {
+      via = "";
+      input.value = "";
+      const dmgEffect = effects.find((e) => e.type === "damage") as DamageEffect | undefined;
+      if (dmgEffect) {
+        dmgEffect.amount = parseInt(val, 10);
+      }
+      showViaSuggestions = false;
+      requestAnimationFrame(() => {
+        const dmgInput = document.querySelector(".dnd-dmg-number") as HTMLInputElement | null;
+        if (dmgInput) {
+          dmgInput.focus();
+          // Place cursor after the number
+          const len = String(dmgEffect?.amount ?? "").length;
+          dmgInput.setSelectionRange(len, len);
+        }
+      });
+      return;
+    }
+
+    via = val;
     showTargets = false;
     showEffectPicker = false;
     showViaSuggestions = combinedSuggestions.length > 0;
@@ -336,7 +361,7 @@
     // If failed, log the attempt with no effects applied
     if (isFailed) {
       const isSpellAction = isSpell || preset === "cast";
-      encounter.log.push({
+      encounter.logInsert({
         attack: {
           by: actor.id,
           via: via || (preset === "attack" ? "attack" : "spell"),
@@ -404,7 +429,7 @@
           }
         }
       }
-      encounter.log.push({
+      encounter.logInsert({
         condition: {
           by: actor.id,
           tgt: affectedTargetIds,
@@ -437,7 +462,7 @@
       // Log once per tag effect, not once per target
       for (const tagEffect of tagEffects) {
         if (!tagEffect.name) continue;
-        encounter.log.push({
+        encounter.logInsert({
           tag: {
             by: actor.id,
             tgt: affectedTargetIds,

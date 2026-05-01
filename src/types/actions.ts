@@ -127,6 +127,14 @@ export interface TagEntry {
   };
 }
 
+export interface MoveEntry {
+  move: {
+    by: string;
+    verb: string;
+    target?: string;
+  };
+}
+
 export type LogEntry =
   | StartCombatEntry
   | EndCombatEntry
@@ -143,4 +151,5 @@ export type LogEntry =
   | AddCombatantEntry
   | RemoveCombatantEntry
   | ConditionEntry
-  | TagEntry;
+  | TagEntry
+  | MoveEntry;

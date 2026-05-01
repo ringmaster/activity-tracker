@@ -3,6 +3,11 @@ import type { Combatant, CombatAction } from "../types/encounter";
 import type { PartyMember } from "../types/party";
 import { rollInitiative } from "../utils/dice";
 import { nowTimestamp } from "../utils/time";
+
+/** Check if a combatant should be skipped in turn order. */
+function isOutOfCombat(c: Combatant): boolean {
+  return c.conditions.includes("dead") || c.conditions.includes("fled");
+}
 import { getCreature } from "./statblocks-api";
 import type { App } from "obsidian";
 
@@ -119,7 +124,7 @@ export function startEncounter(
 
   // Advance to first living combatant
   const first = state.sortedCombatants.find(
-    (c) => !c.conditions.includes("dead"),
+    (c) => !isOutOfCombat(c),
   );
   if (first) {
     state.currentTurn = first.id;
@@ -134,7 +139,7 @@ export function startEncounter(
  *  new log entries. Only appends when advancing past the end of history. */
 export function nextTurn(state: EncounterState): void {
   const sorted = state.sortedCombatants;
-  const living = sorted.filter((c) => !c.conditions.includes("dead"));
+  const living = sorted.filter((c) => !isOutOfCombat(c));
   if (living.length === 0) return;
 
   // Clear any actor swap
@@ -168,7 +173,7 @@ export function nextTurn(state: EncounterState): void {
       nextIdx = 0;
       wrapped = true;
     }
-    if (!sorted[nextIdx].conditions.includes("dead")) break;
+    if (!isOutOfCombat(sorted[nextIdx])) break;
     nextIdx++;
     if (nextIdx >= sorted.length) {
       nextIdx = 0;

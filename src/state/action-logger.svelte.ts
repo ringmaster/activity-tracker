@@ -44,7 +44,7 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
   };
   if (params.isSpell) entry.attack.spell = true;
   if (params.save) entry.attack.save = params.save;
-  state.log.push(entry);
+  state.logInsert(entry);
 
   // Apply damage to targets
   for (const t of tgt) {
@@ -87,7 +87,7 @@ export interface HealParams {
 }
 
 export function commitHeal(state: EncounterState, params: HealParams): void {
-  state.log.push({
+  state.logInsert({
     heal: {
       by: params.by,
       via: params.via,
@@ -126,7 +126,7 @@ export interface NoteParams {
 }
 
 export function commitNote(state: EncounterState, params: NoteParams): void {
-  state.log.push({
+  state.logInsert({
     note: {
       by: params.by,
       text: params.text,
@@ -211,7 +211,7 @@ function applyDamage(state: EncounterState, targetId: string, amount: number): v
     // Auto-death at 0 HP for NPCs
     if (combatant.hp.current === 0 && !combatant.conditions.includes("dead")) {
       combatant.conditions.push("dead");
-      state.log.push({ death: { who: targetId, at: nowTimestamp() } });
+      state.logInsert({ death: { who: targetId, at: nowTimestamp() } });
 
       // Drop concentration on death
       if (combatant.concentration) {
@@ -257,7 +257,7 @@ export function dropConcentration(state: EncounterState, casterId: string): void
   const spellKey = combatant.concentration.spell;
   combatant.concentration = null;
 
-  state.log.push({
+  state.logInsert({
     effect_ends: {
       what: spellKey,
       on: casterId,

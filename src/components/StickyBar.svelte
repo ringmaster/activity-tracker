@@ -116,11 +116,12 @@
       return [];
     }
 
-    const entries: string[] = [];
+    const entries: { text: string; logIndex: number; canUndo: boolean }[] = [];
     for (let i = turnStartIdx + 1; i < log.length; i++) {
       if ("start_turn" in log[i]) break;
       const summary = summarizeLogEntry(log[i]);
-      if (summary) entries.push(summary);
+      const isDeath = "death" in log[i];
+      if (summary) entries.push({ text: summary, logIndex: i, canUndo: !isDeath });
     }
     return entries;
   });
@@ -185,6 +186,20 @@
         .join(", ");
       return `${actorName} tags ${targets} with ${entry.tag.name}${entry.tag.note ? ` (${entry.tag.note})` : ""}.`;
     }
+    if (entry.move) {
+      const actorName = encounter.getCombatant(entry.move.by)?.name ?? entry.move.by;
+      const targetName = entry.move.target
+        ? encounter.getCombatant(entry.move.target)?.name ?? entry.move.target
+        : null;
+      if (entry.move.verb === "flees") {
+        return targetName
+          ? `${actorName} flees from ${targetName}.`
+          : `${actorName} flees from the encounter.`;
+      }
+      return targetName
+        ? `${actorName} ${entry.move.verb} ${targetName}.`
+        : `${actorName} ${entry.move.verb} the encounter.`;
+    }
     if (entry.note) {
       const actorName = encounter.getCombatant(entry.note.by)?.name ?? entry.note.by;
       return `${actorName}: ${entry.note.text}`;
@@ -197,6 +212,106 @@
       return `${entry.effect_ends.what} ended on ${encounter.getCombatant(entry.effect_ends.on)?.name ?? entry.effect_ends.on}.`;
     }
     return null;
+  }
+
+  let confirmDeleteIdx = $state<number | null>(null);
+
+  function requestDelete(logIndex: number) {
+    if (confirmDeleteIdx === logIndex) {
+      revertAndDelete(logIndex);
+      confirmDeleteIdx = null;
+    } else {
+      confirmDeleteIdx = logIndex;
+    }
+  }
+
+  function revertAndDelete(logIndex: number) {
+    const entry = encounter.log[logIndex] as any;
+    if (!entry) return;
+
+    // Revert attack/spell damage
+    if (entry.attack) {
+      for (const t of entry.attack.tgt) {
+        if (t.dmg && t.dmg.length > 0) {
+          const total = t.dmg.reduce((s: number, d: any) => s + d.n, 0);
+          const combatant = encounter.getCombatant(t.who);
+          if (combatant) {
+            if (combatant.type === "npc" && combatant.hp) {
+              combatant.hp.current = Math.min(combatant.hp.current + total, combatant.hp.max);
+              // Remove dead condition if HP restored above 0
+              if (combatant.hp.current > 0) {
+                combatant.conditions = combatant.conditions.filter((c) => c !== "dead");
+                // Also remove the death log entry if it immediately follows
+                for (let j = logIndex + 1; j < encounter.log.length; j++) {
+                  const next = encounter.log[j] as any;
+                  if (next.death && next.death.who === t.who) {
+                    encounter.log.splice(j, 1);
+                    break;
+                  }
+                  if (next.start_turn) break;
+                }
+              }
+            } else if (combatant.type === "pc") {
+              combatant.damage_taken = Math.max(0, (combatant.damage_taken ?? 0) - total);
+            }
+          }
+        }
+      }
+    }
+
+    // Revert heal
+    if (entry.heal) {
+      for (const t of entry.heal.tgt) {
+        const combatant = encounter.getCombatant(t.who);
+        if (!combatant) continue;
+        if (combatant.type === "npc" && combatant.hp) {
+          combatant.hp.current = Math.max(0, combatant.hp.current - t.hp);
+        } else if (combatant.type === "pc") {
+          combatant.damage_taken = (combatant.damage_taken ?? 0) + t.hp;
+        }
+      }
+    }
+
+    // Revert condition application
+    if (entry.condition) {
+      for (const targetId of entry.condition.tgt) {
+        const combatant = encounter.getCombatant(targetId);
+        if (!combatant) continue;
+        for (const cond of entry.condition.conditions) {
+          combatant.conditions = combatant.conditions.filter((c) => c !== cond);
+        }
+      }
+    }
+
+    // Revert tag application
+    if (entry.tag) {
+      for (const targetId of entry.tag.tgt) {
+        const combatant = encounter.getCombatant(targetId);
+        if (!combatant) continue;
+        combatant.tags = combatant.tags.filter((t) => t.name !== entry.tag.name || t.source !== entry.tag.by);
+      }
+    }
+
+    // Revert effect_ends (re-add the condition/tag)
+    if (entry.effect_ends) {
+      const combatant = encounter.getCombatant(entry.effect_ends.on);
+      if (combatant && entry.effect_ends.reason === "dismissed") {
+        // We don't have enough info to fully restore a tag, but we can re-add a condition
+        if (!combatant.conditions.includes(entry.effect_ends.what)) {
+          combatant.conditions.push(entry.effect_ends.what);
+        }
+      }
+    }
+
+    // Remove the log entry
+    encounter.log.splice(logIndex, 1);
+
+    // Adjust currentTurnLogIndex if it shifted
+    if (encounter.currentTurnLogIndex > logIndex) {
+      encounter.currentTurnLogIndex--;
+    }
+
+    encounter.flush();
   }
 
   function dismissTag(combatantId: string, tagId: string) {
@@ -218,7 +333,7 @@
         const hadConc = source.tags.some((t) => t.name === concTagName);
         if (hadConc) {
           source.tags = source.tags.filter((t) => t.name !== concTagName);
-          encounter.log.push({
+          encounter.logInsert({
             effect_ends: { what: tag.name, on: tag.source, reason: "effect_dismissed" },
           });
         }
@@ -226,7 +341,7 @@
     }
 
     // Log the dismissal
-    encounter.log.push({
+    encounter.logInsert({
       effect_ends: { what: tag.name, on: combatantId, reason: "dismissed" },
     });
 
@@ -239,7 +354,7 @@
 
     combatant.conditions = combatant.conditions.filter((c) => c !== condition);
 
-    encounter.log.push({
+    encounter.logInsert({
       effect_ends: { what: condition, on: combatantId, reason: "dismissed" },
     });
 
@@ -296,8 +411,18 @@
 
 {#if turnLog.length > 0}
   <div class="dnd-turn-log">
-    {#each turnLog as line}
-      <div class="dnd-turn-log-entry">&raquo; {line}</div>
+    {#each turnLog as line (line.logIndex)}
+      <div class="dnd-turn-log-entry">
+        <span>&raquo; {line.text}</span>
+        {#if line.canUndo}
+          <button
+            class="dnd-turn-log-delete"
+            class:confirm={confirmDeleteIdx === line.logIndex}
+            title={confirmDeleteIdx === line.logIndex ? "Click again to confirm" : "Undo this action"}
+            onclick={() => requestDelete(line.logIndex)}
+          >&times;</button>
+        {/if}
+      </div>
     {/each}
   </div>
 {/if}

@@ -133,6 +133,8 @@
 .dnd-dropdown-row {
   display: flex;
   align-items: center;
+  justify-content: unset;
+  text-align: left;
   gap: 8px;
   padding: 8px 12px;
   min-height: 44px;
@@ -242,10 +244,45 @@
 }
 
 .dnd-turn-log-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
   font-size: 13px;
   color: var(--text-accent);
-  padding: 1px 0;
-  line-height: 1.4;
+  padding: 0;
+  margin: 0;
+  line-height: 1.3;
+  min-height: 0;
+}
+
+.dnd-turn-log-entry span {
+  flex: 1;
+}
+
+.dnd-turn-log-delete {
+  flex-shrink: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.4;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  height: auto;
+  width: auto;
+}
+
+.dnd-turn-log-delete:hover {
+  opacity: 1;
+}
+
+.dnd-turn-log-delete.confirm {
+  color: var(--text-error);
+  opacity: 1;
 }
 
 /* ---------- Obligation banners ---------- */
@@ -395,6 +432,61 @@
 .dnd-combatant-row.dead {
   opacity: 0.5;
   text-decoration: line-through;
+}
+
+.dnd-combatant-row.fled {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.dnd-combatant-tag.fled {
+  background: var(--text-muted);
+}
+
+/* ---------- Action bar icons ---------- */
+.dnd-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.dnd-action-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.dnd-icon-cast svg { fill: #a080e0; }
+.dnd-icon-heal { color: #e04040; }
+.dnd-icon-move svg { fill: #60b0e0; }
+
+/* ---------- Move action buttons ---------- */
+.dnd-move-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.dnd-move-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.dnd-icon-closes svg { fill: #60c060; }
+.dnd-icon-separates svg { fill: #e0a030; }
+.dnd-icon-distances svg { fill: #60b0e0; }
+.dnd-icon-flies svg { fill: #a0c8e0; }
+.dnd-icon-flees svg { fill: #e04040; }
+
+.dnd-move-btn {
+  padding: 4px 10px;
+}
+
+.dnd-move-flee {
+  border-color: var(--text-error);
 }
 
 .dnd-combatant-caret {
