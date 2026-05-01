@@ -70,11 +70,8 @@ export default class ActivityTrackerPlugin extends Plugin {
 
     // On plugin load, the workspace may already be showing a note with
     // an active encounter. Wait for layout to be ready, then check.
-    // Multiple retries for mobile Obsidian which may settle slowly.
     this.app.workspace.onLayoutReady(() => {
       setTimeout(() => this.updateBarVisibility(), 200);
-      setTimeout(() => this.updateBarVisibility(), 1000);
-      setTimeout(() => this.updateBarVisibility(), 3000);
     });
   }
 
@@ -205,12 +202,9 @@ export default class ActivityTrackerPlugin extends Plugin {
     };
     ctx.addChild(cleanup);
 
-    // If this encounter is active, schedule visibility checks.
-    // Multiple retries because mobile Obsidian may take longer to settle.
+    // If this encounter is active, schedule a visibility check.
     if (state.active) {
-      setTimeout(() => this.updateBarVisibility(), 100);
-      setTimeout(() => this.updateBarVisibility(), 500);
-      setTimeout(() => this.updateBarVisibility(), 1500);
+      setTimeout(() => this.updateBarVisibility(), 150);
     }
   }
 
