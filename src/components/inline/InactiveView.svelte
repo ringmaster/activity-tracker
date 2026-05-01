@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import { resetEncounter } from "../../state/combat-engine.svelte";
+  import { summarizeLogEntry } from "../../utils/log-summary";
   import CombatantRow from "./CombatantRow.svelte";
 
   let { encounter, onRunEncounter, readOnly = false }: {
@@ -11,6 +12,14 @@
 
   let hasBeenStarted = $derived(encounter.round > 0 || encounter.log.length > 0);
   let confirmReset = $state(false);
+  let showLog = $state(false);
+
+  let fullLog = $derived.by(() => {
+    if (!showLog) return [];
+    return encounter.log
+      .map((entry) => summarizeLogEntry(entry, encounter))
+      .filter((s): s is string => s !== null);
+  });
 
   function handleContinue() {
     encounter.active = true;
@@ -24,6 +33,11 @@
     }
     resetEncounter(encounter);
     confirmReset = false;
+  }
+
+  async function copyLogToClipboard() {
+    const text = fullLog.join("\n");
+    await navigator.clipboard.writeText(text);
   }
 </script>
 
@@ -47,19 +61,38 @@
   {/if}
 
   {#if !readOnly}
-    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+    <div class="dnd-inline-actions">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        {#if hasBeenStarted}
+          <button class="dnd-encounter-btn" onclick={handleContinue}>
+            &#9654; Continue encounter
+          </button>
+          <button class="dnd-encounter-btn reset" onclick={handleReset}>
+            {confirmReset ? "Confirm reset?" : "Reset encounter"}
+          </button>
+        {:else if onRunEncounter}
+          <button class="dnd-encounter-btn" onclick={onRunEncounter}>
+            &#9654; Run encounter
+          </button>
+        {/if}
+      </div>
+
       {#if hasBeenStarted}
-        <button class="dnd-encounter-btn" onclick={handleContinue}>
-          &#9654; Continue encounter
-        </button>
-        <button class="dnd-encounter-btn reset" onclick={handleReset}>
-          {confirmReset ? "Confirm reset?" : "Reset encounter"}
-        </button>
-      {:else if onRunEncounter}
-        <button class="dnd-encounter-btn" onclick={onRunEncounter}>
-          &#9654; Run encounter
-        </button>
+        <button
+          class="dnd-show-log-btn"
+          onclick={() => { showLog = !showLog; }}
+        >{showLog ? "Hide log" : "Show log"}</button>
       {/if}
+    </div>
+  {/if}
+
+  {#if showLog && fullLog.length > 0}
+    <hr class="dnd-log-divider" />
+    <div class="dnd-full-log">
+      <button class="dnd-copy-log-btn" onclick={copyLogToClipboard}>Copy to clipboard</button>
+      {#each fullLog as line}
+        <div class="dnd-full-log-entry">{line}</div>
+      {/each}
     </div>
   {/if}
 </div>
