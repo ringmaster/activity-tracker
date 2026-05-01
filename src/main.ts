@@ -96,6 +96,16 @@ export default class ActivityTrackerPlugin extends Plugin {
     this.barContainer.classList.add("dnd-combat-bar-container");
     this.barContainer.style.display = "none";
 
+    // Capture unhandled errors to the debug log
+    if (this.settings.debugOverlay) {
+      window.addEventListener("error", (e) => {
+        this.debug.log(`UNCAUGHT: ${e.message} at ${e.filename}:${e.lineno}`);
+      });
+      window.addEventListener("unhandledrejection", (e) => {
+        this.debug.log(`UNHANDLED PROMISE: ${e.reason}`);
+      });
+    }
+
     // Listen for leaf changes to manage bar visibility
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
@@ -155,6 +165,24 @@ export default class ActivityTrackerPlugin extends Plugin {
     el: HTMLElement,
     ctx: MarkdownPostProcessorContext,
   ) {
+    try {
+      this._processCodeBlockInner(source, el, ctx);
+    } catch (e: any) {
+      const msg = e?.stack ?? e?.message ?? String(e);
+      this.debug.log(`FATAL in processCodeBlock: ${msg}`);
+      el.createEl("div", {
+        text: `Plugin error: ${msg}`,
+        cls: "dnd-inline-view",
+      });
+      this.debug.attach(el);
+    }
+  }
+
+  private _processCodeBlockInner(
+    source: string,
+    el: HTMLElement,
+    ctx: MarkdownPostProcessorContext,
+  ) {
     this.debug.log(`processCodeBlock: sourcePath=${ctx.sourcePath}`);
 
     const sectionInfo = ctx.getSectionInfo(el);
@@ -176,18 +204,22 @@ export default class ActivityTrackerPlugin extends Plugin {
     try {
       parsed = parseEncounterYaml(source);
     } catch (e) {
+      this.debug.log(`YAML parse error: ${e}`);
       el.createEl("div", {
         text: `Error parsing encounter YAML: ${e}`,
         cls: "dnd-inline-view",
       });
+      this.debug.attach(el);
       return;
     }
 
     if (!parsed || !parsed.encounter) {
+      this.debug.log(`Missing encounter field in parsed YAML`);
       el.createEl("div", {
         text: "Invalid encounter data: missing 'encounter' field.",
         cls: "dnd-inline-view",
       });
+      this.debug.attach(el);
       return;
     }
 
@@ -227,15 +259,29 @@ export default class ActivityTrackerPlugin extends Plugin {
     this.debug.log(`processCodeBlock: isReadingView=${isReadingView}, active=${state.active}, key=${key}`);
 
     // Mount InlineView
-    const component = mount(InlineView, {
-      target: el,
-      props: {
-        encounter: state,
-        app: this.app,
-        partyNotePath: this.settings.partyNotePath,
-        readOnly: !isReadingView,
-      },
-    });
+    this.debug.log("processCodeBlock: mounting InlineView...");
+    let component: ReturnType<typeof mount>;
+    try {
+      component = mount(InlineView, {
+        target: el,
+        props: {
+          encounter: state,
+          app: this.app,
+          partyNotePath: this.settings.partyNotePath,
+          readOnly: !isReadingView,
+        },
+      });
+    } catch (e: any) {
+      const msg = e?.stack ?? e?.message ?? String(e);
+      this.debug.log(`MOUNT FAILED: ${msg}`);
+      el.createEl("div", {
+        text: `Svelte mount error: ${msg}`,
+        cls: "dnd-inline-view",
+      });
+      this.debug.attach(el);
+      return;
+    }
+    this.debug.log("processCodeBlock: mount succeeded");
     this.inlineComponents.set(el, component);
     this.debug.attach(el);
 
