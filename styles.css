@@ -711,6 +711,36 @@
   font-weight: 500;
   background: var(--background-modifier-hover);
   color: var(--text-muted);
+  cursor: pointer;
+}
+
+.dnd-condition-chip.expanded {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+/* Condition description shown in the combatant list */
+.dnd-condition-desc {
+  list-style: none;
+  margin-inline-start: 0 !important;
+  padding: 4px 8px 4px 24px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #7eb8da;
+  background: var(--background-secondary);
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+/* Condition description shown in the actor effects strip */
+.dnd-condition-desc-inline {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #7eb8da;
+  background: var(--background-primary);
+  border-radius: 4px;
 }
 
 .dnd-tag-chip {

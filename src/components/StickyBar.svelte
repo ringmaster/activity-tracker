@@ -3,6 +3,7 @@
   import type { CombatTag } from "../types/encounter";
   import { findLibraryAction } from "../state/library-loader";
   import { renderSpellDescription } from "../utils/spell-renderer";
+  import { CONDITION_DESCRIPTIONS } from "../utils/condition-descriptions";
   import { summarizeLogEntry } from "../utils/log-summary";
   import DefaultBar from "./bar/DefaultBar.svelte";
   import ActionBar from "./bar/ActionBar.svelte";
@@ -127,6 +128,7 @@
 
 
   let confirmDeleteIdx = $state<number | null>(null);
+  let expandedCondition = $state<string | null>(null);
 
   function requestDelete(logIndex: number) {
     if (confirmDeleteIdx === logIndex) {
@@ -305,9 +307,17 @@
   <div class="dnd-actor-effects">
     {#each currentActorEffects.conditions as condition}
       <div class="dnd-actor-effect-row">
-        <span class="dnd-condition-chip">{condition}</span>
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <span
+          class="dnd-condition-chip"
+          class:expanded={expandedCondition === condition}
+          onclick={() => { expandedCondition = expandedCondition === condition ? null : condition; }}
+        >{condition}</span>
         <button class="dnd-effect-dismiss" onclick={() => dismissCondition(currentActorEffects.combatantId, condition)}>&times;</button>
       </div>
+      {#if expandedCondition === condition && CONDITION_DESCRIPTIONS[condition]}
+        <div class="dnd-condition-desc-inline">{CONDITION_DESCRIPTIONS[condition]}</div>
+      {/if}
     {/each}
     {#each currentActorEffects.tags as tag (tag.id)}
       <div class="dnd-actor-effect-row">

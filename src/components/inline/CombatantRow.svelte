@@ -1,10 +1,18 @@
 <script lang="ts">
   import type { Combatant } from "../../types/encounter";
+  import { CONDITION_DESCRIPTIONS } from "../../utils/condition-descriptions";
+  import { renderSpellDescription } from "../../utils/spell-renderer";
 
   let { combatant, isCurrent = false }: { combatant: Combatant; isCurrent?: boolean } = $props();
 
   let isDead = $derived(combatant.conditions.includes("dead"));
   let isFled = $derived(combatant.conditions.includes("fled"));
+
+  let expandedCondition = $state<string | null>(null);
+
+  function toggleCondition(cond: string) {
+    expandedCondition = expandedCondition === cond ? null : cond;
+  }
 
   let hpDisplay = $derived.by(() => {
     if (combatant.type === "npc" && combatant.hp) {
@@ -50,7 +58,12 @@
       <span class="dnd-combatant-tag fled">FLED</span>
     {/if}
     {#each (combatant.conditions ?? []).filter(c => c !== "dead" && c !== "fled") as cond}
-      <span class="dnd-condition-chip">{cond}</span>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <span
+        class="dnd-condition-chip"
+        class:expanded={expandedCondition === cond}
+        onclick={() => toggleCondition(cond)}
+      >{cond}</span>
     {/each}
     {#each (combatant.tags ?? []) as tag (tag.id)}
       <span class="dnd-tag-chip" title={tag.note ?? ""}>{tag.name}</span>
@@ -60,3 +73,8 @@
   <span class="dnd-combatant-ac">{acDisplay}</span>
   <span class="dnd-combatant-hp" class:bloodied={isBloodied}>{hpDisplay}</span>
 </li>
+{#if expandedCondition && CONDITION_DESCRIPTIONS[expandedCondition]}
+  <li class="dnd-condition-desc">
+    {CONDITION_DESCRIPTIONS[expandedCondition]}
+  </li>
+{/if}
