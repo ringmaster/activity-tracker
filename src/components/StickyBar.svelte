@@ -84,7 +84,7 @@
         // on_ally_turn: fires when any ally of the tag source takes their turn
         if (tag.trigger === "on_ally_turn" && tag.source) {
           const source = encounter.getCombatant(tag.source);
-          if (source && currentActor.id !== combatant.id && areAllies(source, currentActor)) {
+          if (source && areAllies(source, currentActor)) {
             banners.push({
               tag,
               combatantId: currentActor.id,
