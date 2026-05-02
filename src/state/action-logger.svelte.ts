@@ -2,7 +2,6 @@ import type { EncounterState } from "./encounter-state.svelte";
 import type { DamageComponent, CombatAction } from "../types/encounter";
 import type { AttackTargetResult } from "../types/actions";
 import { applyOutcome, totalDamage, concentrationDC } from "../utils/damage-calc";
-import { findLibraryAction } from "./library-loader";
 import { findLibraryAction, addToLibrary } from "./library-loader";
 import { updatePartyMember } from "./party-loader";
 import { nowTimestamp } from "../utils/time";
@@ -168,37 +167,26 @@ function learnAction(
   });
   if (knownAction || knownSpell) return;
 
-  // Already in the library?
-  if (findLibraryAction(via)) {
-    // Just add a string reference to the actor
+  // Already in the library? Just add a string reference
+  const libMatch = findLibraryAction(via);
+  if (libMatch) {
     if (isSpellAction) {
       if (!actor.spells) actor.spells = [];
-      actor.spells.push(via);
+      actor.spells.push(libMatch.name);
     } else {
       if (!actor.actions) actor.actions = [];
-      actor.actions.push(via);
+      actor.actions.push(libMatch.name);
     }
     if (actor.type === "pc") {
       updatePartyMember(state.app, state.partyNotePath, actor.id,
-        isSpellAction ? undefined : [{ name: via, type: "attack" }],
-        isSpellAction ? [via] : undefined,
+        isSpellAction ? undefined : [libMatch.name],
+        isSpellAction ? [libMatch.name] : undefined,
       );
     }
     return;
   }
 
-  // If it matches an SRD spell, store as a spell name string
-  const srd = findLibraryAction(via);
-  if (srd) {
-    if (!actor.spells) actor.spells = [];
-    actor.spells.push(srd.name);
-    if (actor.type === "pc") {
-      updatePartyMember(state.app, state.partyNotePath, actor.id, undefined, [srd.name]);
-    }
-    return;
-  }
-
-  // For PCs: add to the library, then reference by name
+  // For PCs: add full action to the library, then string reference on the actor
   if (actor.type === "pc") {
     const types = dmgComponents.filter((d) => d.type);
     const libAction: CombatAction = {
@@ -212,7 +200,7 @@ function learnAction(
 
     addToLibrary(state.app, state.libraryPaths, libAction);
 
-    // Add string reference to the actor
+    // Add string reference to actor and party file
     if (isSpellAction) {
       if (!actor.spells) actor.spells = [];
       actor.spells.push(via);
@@ -220,7 +208,7 @@ function learnAction(
     } else {
       if (!actor.actions) actor.actions = [];
       actor.actions.push(via);
-      updatePartyMember(state.app, state.partyNotePath, actor.id, [{ name: via, type: "attack" }]);
+      updatePartyMember(state.app, state.partyNotePath, actor.id, [via]);
     }
     return;
   }

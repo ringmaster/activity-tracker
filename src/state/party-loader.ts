@@ -64,7 +64,7 @@ export async function updatePartyMember(
   app: App,
   partyNotePath: string,
   memberId: string,
-  newActions?: PartyAction[],
+  newActions?: (string | PartyAction)[],
   newSpells?: string[],
 ): Promise<void> {
   const file = app.vault.getAbstractFileByPath(partyNotePath);
@@ -123,15 +123,17 @@ export async function updatePartyMember(
 
   let changed = false;
 
-  // Merge new actions
+  // Merge new actions (strings are library references, objects are inline)
   if (newActions) {
     if (!member.actions) member.actions = [];
     for (const action of newActions) {
-      const exists = member.actions.some(
-        (a) => a.name.toLowerCase() === action.name.toLowerCase(),
-      );
+      const actionName = typeof action === "string" ? action : action.name;
+      const exists = member.actions.some((a) => {
+        const name = typeof a === "string" ? a : a.name;
+        return name.toLowerCase() === actionName.toLowerCase();
+      });
       if (!exists) {
-        member.actions.push(action);
+        member.actions.push(action as any);
         changed = true;
       }
     }
