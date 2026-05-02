@@ -45,15 +45,21 @@ export interface Behavior {
 
 /** An effect that auto-populates the action bar when this action is selected. */
 export interface ActionEffect {
-  type: "tag" | "condition" | "concentration";
+  type: "tag" | "condition" | "concentration" | "damage" | "heal";
   /** For tag/condition: the name of the tag or condition to apply. */
   name?: string;
-  /** Who receives the effect: "target" or "self". Default: "target". */
-  on?: "target" | "self";
-  /** For tags: trigger timing. */
+  /** Who receives the effect: "target" | "self" | "enemy" | "ally". */
+  on?: "target" | "self" | "enemy" | "ally";
+  /** Trigger timing. Without trigger, damage applies immediately. */
   trigger?: TagTrigger;
-  /** For tags: reminder note shown in banners. */
+  /** Reminder note shown in banners. */
   note?: string;
+  /** For deferred damage: dice expression (display only). */
+  dice?: string;
+  /** For deferred damage: damage type. */
+  damageType?: string;
+  /** For deferred damage: save info. */
+  save?: { stat: string; onSave?: string };
 }
 
 export interface CombatAction {
@@ -104,6 +110,14 @@ export interface CombatTag {
   trigger?: TagTrigger;
   onTrigger?: string;
   autoRemove?: "on_save" | "on_source_end" | "manual";
+  /** Deferred damage/heal: dice expression for display. */
+  dice?: string;
+  /** Deferred damage: damage type. */
+  damageType?: string;
+  /** Deferred damage: save info. */
+  save?: { stat: string; onSave?: string };
+  /** Deferred heal flag. */
+  isHeal?: boolean;
 }
 
 export interface Combatant {

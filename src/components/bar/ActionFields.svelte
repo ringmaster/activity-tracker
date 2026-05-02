@@ -342,6 +342,37 @@
         } else if (ae.type === "concentration" && !effects.some((e) => e.type === "concentration")) {
           effects = [...effects, { type: "concentration" }];
           isConc = true;
+        } else if (ae.type === "damage" && ae.trigger) {
+          // Deferred damage: create a tag effect with damage info embedded
+          // (will be stored on the tag at commit time)
+          effects = [...effects, {
+            type: "tag",
+            name: ae.name ?? via,
+            note: buildDeferredDamageNote(ae),
+            trigger: ae.trigger,
+            // Stash damage info for tag creation
+            _damageType: ae.damageType,
+            _dice: ae.dice,
+            _save: ae.save,
+          } as any];
+        } else if (ae.type === "damage" && !ae.trigger) {
+          // Immediate damage: add damage widget
+          if (ae.damageType) {
+            setDamageEffects([{ dice: ae.dice ?? "", type: ae.damageType }]);
+          }
+        } else if (ae.type === "heal" && ae.trigger) {
+          // Deferred heal: create a tag with heal info
+          effects = [...effects, {
+            type: "tag",
+            name: ae.name ?? via,
+            note: `${ae.dice ?? ""} healing${ae.note ? "; " + ae.note : ""}`,
+            trigger: ae.trigger,
+            _isHeal: true,
+            _dice: ae.dice,
+          } as any];
+        } else if (ae.type === "heal" && !ae.trigger) {
+          // Immediate heal: add heal widget
+          effects = [...effects, { type: "heal", amount: 0 }];
         }
       }
     }
@@ -368,6 +399,16 @@
       damageType: d.type,
     }));
     effects = [...newDmg, ...nonDamage];
+  }
+
+  function buildDeferredDamageNote(ae: ActionEffect): string {
+    const parts: string[] = [];
+    if (ae.save?.stat) parts.push(`${ae.save.stat.toUpperCase()} save`);
+    if (ae.dice && ae.damageType) parts.push(`${ae.dice} ${ae.damageType}`);
+    else if (ae.damageType) parts.push(ae.damageType);
+    if (ae.save?.onSave) parts.push(`${ae.save.onSave} on save`);
+    if (ae.note) parts.push(ae.note);
+    return parts.join("; ");
   }
 
   function focusFirstEffectInput() {
@@ -586,6 +627,7 @@
         if (!combatant) continue;
         for (const tagEffect of tagEffects) {
           if (!tagEffect.name) continue;
+          const tagAny = tagEffect as any;
           combatant.tags.push({
             id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             name: tagEffect.name,
@@ -594,6 +636,11 @@
             trigger: tagEffect.trigger || undefined,
             onTrigger: tagEffect.note || undefined,
             autoRemove: "manual",
+            // Carry deferred damage/heal info if present
+            damageType: tagAny._damageType || undefined,
+            dice: tagAny._dice || undefined,
+            save: tagAny._save || undefined,
+            isHeal: tagAny._isHeal || undefined,
           });
         }
       }

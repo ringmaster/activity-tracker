@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EncounterState } from "../state/encounter-state.svelte";
   import type { CombatTag } from "../types/encounter";
+  import { commitAttack, commitHeal } from "../state/action-logger.svelte";
   import { findLibraryAction } from "../state/library-loader";
   import { renderSpellDescription } from "../utils/spell-renderer";
   import { CONDITION_DESCRIPTIONS } from "../utils/condition-descriptions";
@@ -149,6 +150,48 @@
 
   let confirmDeleteIdx = $state<number | null>(null);
   let expandedCondition = $state<string | null>(null);
+
+  // Resolve flow state for deferred damage/heal banners
+  let resolvingTagId = $state<string | null>(null);
+  let resolveAmount = $state<number>(0);
+  let resolveOutcome = $state<"full" | "half" | "zero">("full");
+
+  function startResolve(tagId: string) {
+    resolvingTagId = resolvingTagId === tagId ? null : tagId;
+    resolveAmount = 0;
+    resolveOutcome = "full";
+  }
+
+  function commitResolve(banner: TagBanner) {
+    const tag = banner.tag;
+    const targetId = banner.combatantId;
+    const sourceId = tag.source ?? targetId;
+
+    if (tag.isHeal && resolveAmount > 0) {
+      commitHeal(encounter, {
+        by: sourceId,
+        via: tag.name,
+        targets: [{ who: targetId, hp: resolveAmount }],
+      });
+    } else if (tag.damageType && resolveAmount > 0) {
+      const dmgAmount = resolveOutcome === "zero" ? 0
+        : resolveOutcome === "half" ? Math.floor(resolveAmount / 2)
+        : resolveAmount;
+
+      if (dmgAmount > 0) {
+        commitAttack(encounter, {
+          by: sourceId,
+          via: tag.name,
+          isSpell: true,
+          baseDmg: [{ n: dmgAmount, type: tag.damageType }],
+          targets: [{ who: targetId, outcome: resolveOutcome }],
+        });
+      }
+    }
+
+    resolvingTagId = null;
+    encounter.flush();
+  }
 
   function renderConditionDesc(el: HTMLElement, cond: string) {
     renderSpellDescription(el, CONDITION_DESCRIPTIONS[cond] ?? "");
@@ -394,6 +437,13 @@
           <div class="dnd-banner-detail">{banner.tag.note}</div>
         {/if}
         <div class="dnd-banner-actions">
+          {#if banner.tag.damageType || banner.tag.isHeal}
+            <button
+              class="dnd-banner-btn dnd-resolve-btn"
+              class:active={resolvingTagId === banner.tag.id}
+              onclick={() => startResolve(banner.tag.id)}
+            >Resolve</button>
+          {/if}
           {#if srdSpellName}
             <button
               class="dnd-banner-btn dnd-spell-name-btn"
@@ -405,6 +455,38 @@
             Dismiss
           </button>
         </div>
+
+        {#if resolvingTagId === banner.tag.id}
+          <div class="dnd-resolve-form">
+            {#if banner.tag.dice}
+              <span class="dnd-resolve-dice">Roll: {banner.tag.dice} {banner.tag.damageType ?? (banner.tag.isHeal ? "healing" : "")}</span>
+            {/if}
+            <div class="dnd-resolve-controls">
+              <input
+                type="number"
+                inputmode="numeric"
+                class="dnd-action-input narrow"
+                placeholder={banner.tag.isHeal ? "HP" : "dmg"}
+                value={resolveAmount || ""}
+                oninput={(e) => { resolveAmount = parseInt((e.target as HTMLInputElement).value, 10) || 0; }}
+                onkeydown={(e) => { if (e.key === "Enter") commitResolve(banner); }}
+              />
+              {#if banner.tag.damageType && banner.tag.save}
+                <div class="dnd-outcome-radios">
+                  <button class="dnd-outcome-radio" class:selected={resolveOutcome === "full"} onclick={() => { resolveOutcome = "full"; }}>
+                    {banner.tag.save.onSave === "half" ? "Fail" : "Hit"}
+                  </button>
+                  <button class="dnd-outcome-radio" class:selected={resolveOutcome === "half"} onclick={() => { resolveOutcome = "half"; }}>Half</button>
+                  <button class="dnd-outcome-radio" class:selected={resolveOutcome === "zero"} onclick={() => { resolveOutcome = "zero"; }}>
+                    {banner.tag.save.onSave === "half" ? "Save" : "Zero"}
+                  </button>
+                </div>
+              {/if}
+              <button class="dnd-banner-btn active" onclick={() => commitResolve(banner)}>Apply</button>
+            </div>
+          </div>
+        {/if}
+
         {#if isDescExpanded && srdSpellName}
           <div class="dnd-spell-desc dnd-banner-spell-desc" use:renderSpellDesc={srdSpellName}></div>
         {/if}
