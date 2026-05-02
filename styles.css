@@ -898,6 +898,7 @@
 /* ---------- Damage type icons ---------- */
 .dnd-dmg-type-icon-wrapper {
   display: inline-flex;
+  position: relative;
 }
 
 .dnd-dmg-type-btn {
@@ -938,7 +939,7 @@
 .dnd-dmg-type-grid {
   position: absolute;
   top: 100%;
-  right: 0;
+  left: 0;
   z-index: 1002;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
