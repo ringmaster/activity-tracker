@@ -130,6 +130,15 @@
   let confirmDeleteIdx = $state<number | null>(null);
   let expandedCondition = $state<string | null>(null);
 
+  function renderConditionDesc(el: HTMLElement, cond: string) {
+    renderSpellDescription(el, CONDITION_DESCRIPTIONS[cond] ?? "");
+    return {
+      update(newCond: string) {
+        renderSpellDescription(el, CONDITION_DESCRIPTIONS[newCond] ?? "");
+      },
+    };
+  }
+
   function requestDelete(logIndex: number) {
     if (confirmDeleteIdx === logIndex) {
       revertAndDelete(logIndex);
@@ -316,7 +325,7 @@
         <button class="dnd-effect-dismiss" onclick={() => dismissCondition(currentActorEffects.combatantId, condition)}>&times;</button>
       </div>
       {#if expandedCondition === condition && CONDITION_DESCRIPTIONS[condition]}
-        <div class="dnd-condition-desc-inline">{CONDITION_DESCRIPTIONS[condition]}</div>
+        <div class="dnd-condition-desc-inline" use:renderConditionDesc={condition}></div>
       {/if}
     {/each}
     {#each currentActorEffects.tags as tag (tag.id)}

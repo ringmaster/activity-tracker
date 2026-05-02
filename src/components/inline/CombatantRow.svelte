@@ -14,6 +14,15 @@
     expandedCondition = expandedCondition === cond ? null : cond;
   }
 
+  function renderCondition(el: HTMLElement, cond: string) {
+    renderSpellDescription(el, CONDITION_DESCRIPTIONS[cond] ?? "");
+    return {
+      update(newCond: string) {
+        renderSpellDescription(el, CONDITION_DESCRIPTIONS[newCond] ?? "");
+      },
+    };
+  }
+
   let hpDisplay = $derived.by(() => {
     if (combatant.type === "npc" && combatant.hp) {
       return `${combatant.hp.current}/${combatant.hp.max}`;
@@ -74,7 +83,5 @@
   <span class="dnd-combatant-hp" class:bloodied={isBloodied}>{hpDisplay}</span>
 </li>
 {#if expandedCondition && CONDITION_DESCRIPTIONS[expandedCondition]}
-  <li class="dnd-condition-desc">
-    {CONDITION_DESCRIPTIONS[expandedCondition]}
-  </li>
+  <li class="dnd-condition-desc" use:renderCondition={expandedCondition}></li>
 {/if}
