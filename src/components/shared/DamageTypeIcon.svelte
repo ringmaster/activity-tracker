@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DAMAGE_ICONS, DAMAGE_TYPES, getDamageIcon } from "../../icons/damage-icons";
+  import { DAMAGE_ICONS, DAMAGE_TYPES, getDamageIcon, sizeSvg } from "../../icons/damage-icons";
 
   let { value = $bindable("") }: {
     value: string;
@@ -7,7 +7,7 @@
 
   let showPicker = $state(false);
 
-  let iconSvg = $derived(getDamageIcon(value));
+  let btnIcon = $derived(getDamageIcon(value, 20));
 
   function select(type: string) {
     value = type;
@@ -26,9 +26,9 @@
     onclick={() => { showPicker = !showPicker; }}
     onblur={handleBlur}
   >
-    {#if iconSvg}
-      <span class="dnd-dmg-icon dnd-dmg-icon-btn" data-type={value}>
-        {@html iconSvg}
+    {#if btnIcon}
+      <span class="dnd-dmg-icon" data-type={value}>
+        {@html btnIcon}
       </span>
     {:else}
       <span class="dnd-dmg-type-text">{value || "?"}</span>
@@ -44,8 +44,8 @@
           title={type}
           onmousedown={() => select(type)}
         >
-          <span class="dnd-dmg-icon dnd-dmg-icon-grid" data-type={type}>
-            {@html DAMAGE_ICONS[type]}
+          <span class="dnd-dmg-icon" data-type={type}>
+            {@html sizeSvg(DAMAGE_ICONS[type], 32)}
           </span>
         </button>
       {/each}

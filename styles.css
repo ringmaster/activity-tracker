@@ -459,15 +459,12 @@
 
 /* ---------- Action bar icons ---------- */
 .dnd-action-icon {
-  display: block;
-  width: 20px;
-  height: 20px;
+  display: inline-block;
+  line-height: 0;
 }
 
 .dnd-action-icon svg {
   display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .dnd-action-icon svg path {
@@ -480,15 +477,12 @@
 
 /* ---------- Move action buttons ---------- */
 .dnd-move-icon {
-  display: block;
-  width: 20px;
-  height: 20px;
+  display: inline-block;
+  line-height: 0;
 }
 
 .dnd-move-icon svg {
   display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .dnd-move-icon svg path {
@@ -929,27 +923,16 @@
 }
 
 .dnd-dmg-icon {
-  display: block;
+  display: inline-block;
+  line-height: 0;
 }
 
 .dnd-dmg-icon svg {
   display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .dnd-dmg-icon svg path {
   fill: inherit;
-}
-
-.dnd-dmg-icon-btn {
-  width: 20px;
-  height: 20px;
-}
-
-.dnd-dmg-icon-grid {
-  width: 32px;
-  height: 32px;
 }
 
 .dnd-dmg-type-grid {

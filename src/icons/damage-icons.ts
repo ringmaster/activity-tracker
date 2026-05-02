@@ -30,6 +30,12 @@ export const DAMAGE_ICONS: Record<string, string> = {
 
 export const DAMAGE_TYPES = Object.keys(DAMAGE_ICONS);
 
-export function getDamageIcon(type: string): string | null {
-  return DAMAGE_ICONS[type.toLowerCase()] ?? null;
+/** Inject explicit width/height attributes onto an SVG string. */
+export function sizeSvg(svg: string, size: number): string {
+  return svg.replace("<svg", `<svg width="${size}" height="${size}"`);
+}
+
+export function getDamageIcon(type: string, size = 20): string | null {
+  const raw = DAMAGE_ICONS[type.toLowerCase()];
+  return raw ? sizeSvg(raw, size) : null;
 }
