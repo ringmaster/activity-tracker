@@ -269,6 +269,7 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
   if (partial.statblock) base.statblock = partial.statblock;
   if (partial.recharge) base.recharge = partial.recharge;
   if (partial.hidden) base.hidden = partial.hidden;
+  if (partial.friendly != null) base.friendly = partial.friendly;
 
   return base;
 }

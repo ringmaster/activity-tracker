@@ -125,6 +125,8 @@ export interface Combatant {
   behavior?: Behavior;
   recharge?: Record<string, boolean>;
   hidden?: boolean;
+  /** NPCs marked friendly group with the party; PCs marked hostile group with NPCs. */
+  friendly?: boolean;
 }
 
 /** The authored shape before expansion; `count` triggers multi-combatant generation. */
@@ -147,7 +149,9 @@ export interface AuthoredCombatant {
   actions?: (string | CombatAction)[];
   spells?: (string | Spell)[];
   behavior?: Behavior;
+  friendly?: boolean;
 }
+
 
 export interface SpellObligation {
   target: "affected" | "enemies_in_range" | "allies_in_range" | "specific";

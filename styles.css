@@ -770,6 +770,22 @@
   background: var(--background-secondary);
 }
 
+.dnd-friendly-toggle {
+  min-width: 24px !important;
+  min-height: 24px !important;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .dnd-target-hp {
   font-size: 11px;
   color: var(--text-muted);

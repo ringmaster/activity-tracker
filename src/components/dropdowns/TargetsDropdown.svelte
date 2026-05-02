@@ -22,24 +22,38 @@
     }
   });
 
-  let actorType = $derived(encounter.effectiveActor?.type ?? "pc");
+  let actor = $derived(encounter.effectiveActor);
 
   function alphaSort(a: { name: string }, b: { name: string }) {
     return a.name.localeCompare(b.name);
   }
 
-  let npcs = $derived(
-    encounter.combatants.filter((c) => c.type === "npc").sort(alphaSort),
-  );
-  let pcs = $derived(
-    encounter.combatants.filter((c) => c.type === "pc").sort(alphaSort),
-  );
+  /** Is this combatant on the same side as the actor? */
+  function isFriendly(c: typeof encounter.combatants[0]): boolean {
+    // PCs are friendly to PCs (and to friendly NPCs)
+    // NPCs are friendly to NPCs (and to hostile PCs, if that ever exists)
+    // The `friendly` flag flips the default allegiance
+    if (c.type === "pc") return actor?.type === "pc" ? !c.friendly : !!c.friendly;
+    if (c.type === "npc") return actor?.type === "npc" ? !c.friendly : !!c.friendly;
+    return false;
+  }
 
-  // Enemies first, friendlies second (relative to the actor)
-  let enemyGroup = $derived(actorType === "pc" ? npcs : pcs);
-  let friendlyGroup = $derived(actorType === "pc" ? pcs : npcs);
-  let enemyLabel = $derived(actorType === "pc" ? "NPCs" : "Party");
-  let friendlyLabel = $derived(actorType === "pc" ? "Party" : "NPCs");
+  // Group combatants by allegiance relative to the actor, sorted alphabetically
+  let enemyGroup = $derived(
+    (encounter.combatants ?? []).filter((c) => !isFriendly(c)).sort(alphaSort),
+  );
+  let friendlyGroup = $derived(
+    (encounter.combatants ?? []).filter((c) => isFriendly(c)).sort(alphaSort),
+  );
+  let enemyLabel = $derived(actor?.type === "pc" ? "Enemies" : "Targets");
+  let friendlyLabel = $derived(actor?.type === "pc" ? "Allies" : "Allies");
+
+  function toggleFriendly(id: string) {
+    const c = encounter.getCombatant(id);
+    if (!c) return;
+    c.friendly = !c.friendly;
+    encounter.flush();
+  }
 
   function toggleTarget(id: string) {
     if (selected[id]) {
@@ -78,6 +92,11 @@
         checked={sel.checked}
         onchange={() => toggleTarget(combatant.id)}
       />
+      <button
+        class="dnd-friendly-toggle"
+        title={isFriendly(combatant) ? "Ally (tap to mark hostile)" : "Enemy (tap to mark friendly)"}
+        onclick={() => toggleFriendly(combatant.id)}
+      >{isFriendly(combatant) ? "\u{1F6E1}" : "\u2694"}</button>
       <button
         class="dnd-target-name"
         onclick={() => selectSingle(combatant.id)}
