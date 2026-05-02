@@ -124,17 +124,17 @@
   );
 
   // Initialize target selection from last-used targets (persists within a turn)
-  let targets = $state<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>(() => {
+  function buildInitialTargets(): Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }> {
     const initial: Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }> = {};
-    for (const id of encounter.lastTargetIds) {
-      const c = encounter.getCombatant(id);
-      // Don't pre-select dead targets
-      if (c && !(c.conditions ?? []).includes("dead")) {
-        initial[id] = { checked: true, outcome: "full" };
-      }
+    // Pre-populate entries for ALL combatants so the dropdown renders them immediately
+    for (const c of encounter.combatants ?? []) {
+      const wasSelected = encounter.lastTargetIds.includes(c.id);
+      const isDead = (c.conditions ?? []).includes("dead");
+      initial[c.id] = { checked: wasSelected && !isDead, outcome: "full" };
     }
     return initial;
-  });
+  }
+  let targets = $state<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>(buildInitialTargets());
 
   let cancelIcon = $derived(
     preset === "attack" ? "\u2694" : preset === "cast" ? "\u2728" : "\u2764",
@@ -256,15 +256,22 @@
     return [...authoredMatches, ...libMatches];
   });
 
+  // Force reactivity by reading the full targets object
+  let checkedTargetIds = $derived(
+    Object.entries(targets)
+      .filter(([_, t]) => t.checked)
+      .map(([id]) => id),
+  );
+
   let targetLabel = $derived.by(() => {
-    const checked = Object.entries(targets).filter(([_, t]) => t.checked);
+    const checked = checkedTargetIds;
     const actorName = encounter.effectiveActor?.name ?? "?";
     if (checked.length === 0) {
       return preset === "attack" ? `${actorName} \u2192` : `${actorName} \u2192 Self`;
     }
     if (checked.length === 1) {
-      const c = encounter.getCombatant(checked[0][0]);
-      const name = c?.name ?? checked[0][0];
+      const c = encounter.getCombatant(checked[0]);
+      const name = c?.name ?? checked[0];
       const ac = c?.ac != null ? ` (${c.ac})` : "";
       return `\u2192 ${name}${ac}`;
     }
