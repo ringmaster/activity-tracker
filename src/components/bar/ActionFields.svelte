@@ -773,12 +773,14 @@
 {/if}
 
 {#if spellDesc}
-  <button
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
     class="dnd-spell-desc"
     bind:this={spellDescEl}
-    title="Tap to show spell details"
+    role="button"
+    aria-label="Tap to show spell details"
     onclick={() => { showSpellMeta = !showSpellMeta; }}
-  ></button>
+  ></div>
   {#if showSpellMeta && selectedSrdSpell}
     <div class="dnd-spell-meta">
       <div class="dnd-spell-meta-row"><strong>Level:</strong> {selectedSrdSpell.level === 0 ? "Cantrip" : selectedSrdSpell.level}</div>
