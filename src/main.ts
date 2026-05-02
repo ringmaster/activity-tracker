@@ -24,7 +24,7 @@ interface ActivityTrackerSettings {
 }
 
 const DEFAULT_SETTINGS: ActivityTrackerSettings = {
-  partyNotePath: "party.md",
+  partyNotePath: "party.yaml",
   libraryPath: "library.md",
   codeBlockLanguage: "dnd-combat",
   debugOverlay: false,
@@ -473,10 +473,10 @@ class ActivityTrackerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Party note path")
-      .setDesc("Path to the vault note containing party data (e.g., party.md)")
+      .setDesc("Path to the vault note containing party data (e.g., party.yaml)")
       .addText((text) =>
         text
-          .setPlaceholder("party.md")
+          .setPlaceholder("party.yaml")
           .setValue(this.plugin.settings.partyNotePath)
           .onChange(async (value) => {
             this.plugin.settings.partyNotePath = value;

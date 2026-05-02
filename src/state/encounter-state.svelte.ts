@@ -80,7 +80,7 @@ export class EncounterState {
   onDeactivate: (() => void) | null = null;
 
   /** Path to the party note for persisting learned PC actions. */
-  partyNotePath: string = "party.md";
+  partyNotePath: string = "party.yaml";
   libraryPath: string = "library.md";
 
   // File reference for YAML persistence
