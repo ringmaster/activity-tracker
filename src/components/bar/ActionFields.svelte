@@ -328,12 +328,9 @@
             trigger: ae.trigger ?? "",
           }];
         } else if (ae.type === "condition" && !effects.some((e) => e.type === "condition" && (e as ConditionEffect).condition === ae.name)) {
-          // Conditions are now added as tags for unified cleanup
           effects = [...effects, {
-            type: "tag",
-            name: ae.name ?? "",
-            note: ae.note ?? "",
-            trigger: ae.trigger ?? "",
+            type: "condition",
+            condition: ae.name ?? "",
           }];
         } else if (ae.type === "concentration" && !effects.some((e) => e.type === "concentration")) {
           effects = [...effects, { type: "concentration" }];
