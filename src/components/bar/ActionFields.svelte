@@ -345,16 +345,15 @@
           isConc = true;
         } else if (ae.type === "damage" && ae.trigger) {
           // Deferred damage: create a tag effect with damage info embedded
-          // (will be stored on the tag at commit time)
           effects = [...effects, {
             type: "tag",
             name: ae.name ?? via,
             note: buildDeferredDamageNote(ae),
             trigger: ae.trigger,
-            // Stash damage info for tag creation
             _damageType: ae.damageType,
             _dice: ae.dice,
             _save: ae.save,
+            _on: ae.on ?? "target",
           } as any];
         } else if (ae.type === "damage" && !ae.trigger) {
           // Immediate damage: add damage widget
@@ -362,7 +361,6 @@
             setDamageEffects([{ dice: ae.dice ?? "", type: ae.damageType }]);
           }
         } else if (ae.type === "heal" && ae.trigger) {
-          // Deferred heal: create a tag with heal info
           effects = [...effects, {
             type: "tag",
             name: ae.name ?? via,
@@ -370,6 +368,7 @@
             trigger: ae.trigger,
             _isHeal: true,
             _dice: ae.dice,
+            _on: ae.on ?? "ally",
           } as any];
         } else if (ae.type === "heal" && !ae.trigger) {
           // Immediate heal: add heal widget
@@ -628,21 +627,17 @@
     const tagEffects = effects.filter((e) => e.type === "tag") as TagEffect[];
     if (tagEffects.length > 0) {
       const affectedTargetIds = selectedTargets.map((t) => t.who);
-      for (const targetId of affectedTargetIds) {
-        const combatant = encounter.getCombatant(targetId);
-        if (!combatant) continue;
-        for (const tagEffect of tagEffects) {
-          if (!tagEffect.name) continue;
-          const tagAny = tagEffect as any;
-          const hasDeferredEffect = !!(tagAny._damageType || tagAny._isHeal);
-          // For deferred effects on self: the tag goes on the caster but
-          // resolves against the selected target
-          const resolveTargetId = hasDeferredEffect && targetId === actor.id
-            ? affectedTargetIds.find((id) => id !== actor.id) ?? undefined
-            : hasDeferredEffect && targetId !== actor.id
-              ? targetId
-              : undefined;
-          combatant.tags.push({
+      for (const tagEffect of tagEffects) {
+        if (!tagEffect.name) continue;
+        const tagAny = tagEffect as any;
+        const hasDeferredEffect = !!(tagAny._damageType || tagAny._isHeal);
+        const effectOn = tagAny._on ?? "target";
+
+        if (hasDeferredEffect && (effectOn === "self" || effectOn === "enemy" || effectOn === "ally")) {
+          // Deferred effect on self/enemy/ally: tag goes on the ACTOR
+          // with resolveTarget pointing to the selected target(s)
+          const firstTarget = affectedTargetIds.find((id) => id !== actor.id) ?? affectedTargetIds[0];
+          actor.tags.push({
             id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             name: tagEffect.name,
             source: actor.id,
@@ -654,8 +649,27 @@
             dice: tagAny._dice || undefined,
             save: tagAny._save || undefined,
             isHeal: tagAny._isHeal || undefined,
-            resolveTarget: resolveTargetId,
+            resolveTarget: firstTarget !== actor.id ? firstTarget : undefined,
           });
+        } else {
+          // Regular tag: placed on each selected target
+          for (const targetId of affectedTargetIds) {
+            const combatant = encounter.getCombatant(targetId);
+            if (!combatant) continue;
+            combatant.tags.push({
+              id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              name: tagEffect.name,
+              source: actor.id,
+              note: tagEffect.note || undefined,
+              trigger: tagEffect.trigger || undefined,
+              onTrigger: tagEffect.note || undefined,
+              autoRemove: "manual",
+              damageType: tagAny._damageType || undefined,
+              dice: tagAny._dice || undefined,
+              save: tagAny._save || undefined,
+              isHeal: tagAny._isHeal || undefined,
+            });
+          }
         }
       }
       // Log once per tag effect, not once per target
