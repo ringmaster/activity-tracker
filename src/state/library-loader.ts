@@ -130,6 +130,17 @@ export async function addToLibrary(
   cachedLibrary.push(action);
 }
 
+/** Normalize field aliases on a loaded action. */
+function normalizeAction(action: CombatAction): CombatAction {
+  // Accept "description" as alias for "desc"
+  const actionAny = action as any;
+  if (actionAny.description && !action.desc) {
+    action.desc = actionAny.description;
+    delete actionAny.description;
+  }
+  return action;
+}
+
 /** Extract actions and spells from a parsed YAML object.
  *  Items under `spells:` get `type: "spell"` if not already set. */
 function extractFromParsed(parsed: LibraryData | null): CombatAction[] {
@@ -137,13 +148,13 @@ function extractFromParsed(parsed: LibraryData | null): CombatAction[] {
   const results: CombatAction[] = [];
 
   if (Array.isArray(parsed.actions)) {
-    results.push(...parsed.actions);
+    results.push(...parsed.actions.map(normalizeAction));
   }
 
   if (Array.isArray(parsed.spells)) {
     for (const spell of parsed.spells) {
       if (!spell.type) spell.type = "spell";
-      results.push(spell);
+      results.push(normalizeAction(spell));
     }
   }
 
