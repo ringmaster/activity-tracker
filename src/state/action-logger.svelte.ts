@@ -341,24 +341,29 @@ export function dropConcentration(state: EncounterState, casterId: string): void
       },
     });
 
-    // Cascade: remove all tags for this spell on ALL combatants (including the caster)
+    // Cascade: remove ALL tags sourced from this caster on ALL combatants.
+    // When concentration drops, every tag created by the concentration spell
+    // should be cleaned up, regardless of the tag's name (e.g., "Hunter's Mark"
+    // and "Hunting" are both sourced from the same caster).
     for (const c of state.combatants ?? []) {
-      const before = c.tags?.length ?? 0;
+      const removedNames: string[] = [];
       c.tags = (c.tags ?? []).filter((t) => {
-        // Remove tags sourced from this caster with the spell name
-        if (t.source === casterId && t.name === spellName) return false;
-        // Also remove tags with the spell name on the caster themselves (self-targeted effects)
-        if (c.id === casterId && t.name === spellName) return false;
+        if (t.source === casterId) {
+          removedNames.push(t.name);
+          return false;
+        }
         return true;
       });
-      if (c.id !== casterId && (c.tags?.length ?? 0) < before) {
-        state.logInsert({
-          effect_ends: {
-            what: spellName,
-            on: c.id,
-            reason: "concentration_dropped",
-          },
-        });
+      if (c.id !== casterId && removedNames.length > 0) {
+        for (const name of removedNames) {
+          state.logInsert({
+            effect_ends: {
+              what: name,
+              on: c.id,
+              reason: "concentration_dropped",
+            },
+          });
+        }
       }
     }
   }

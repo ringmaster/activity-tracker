@@ -651,8 +651,19 @@
             isHeal: tagAny._isHeal || undefined,
             resolveTarget: firstTarget !== actor.id ? firstTarget : undefined,
           });
+        } else if (effectOn === "self") {
+          // Tag goes on the actor
+          actor.tags.push({
+            id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            name: tagEffect.name,
+            source: actor.id,
+            note: tagEffect.note || undefined,
+            trigger: tagEffect.trigger || undefined,
+            onTrigger: tagEffect.note || undefined,
+            autoRemove: "manual",
+          });
         } else {
-          // Regular tag: placed on each selected target
+          // Tag goes on each selected target
           for (const targetId of affectedTargetIds) {
             const combatant = encounter.getCombatant(targetId);
             if (!combatant) continue;
@@ -664,10 +675,6 @@
               trigger: tagEffect.trigger || undefined,
               onTrigger: tagEffect.note || undefined,
               autoRemove: "manual",
-              damageType: tagAny._damageType || undefined,
-              dice: tagAny._dice || undefined,
-              save: tagAny._save || undefined,
-              isHeal: tagAny._isHeal || undefined,
             });
           }
         }
