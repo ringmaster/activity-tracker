@@ -54,7 +54,7 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
 
     // Self-targeted: drop "on [self]"
     if (selfOnly) {
-      if (customVerb) return `${actorName} ${customVerb}.`;
+      if (customVerb) return `${actorName} ${customVerb} ${entry.attack.via}.`;
       if (isSpell) return `${actorName} cast ${entry.attack.via}.`;
       return `${actorName} used ${entry.attack.via}.`;
     }
