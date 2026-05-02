@@ -258,13 +258,13 @@ export function prevTurn(state: EncounterState): void {
 }
 
 /** End the encounter. */
-export function endEncounter(state: EncounterState): void {
+export async function endEncounter(state: EncounterState): Promise<void> {
   state.active = false;
   state.log.push({ end_combat: { at: nowTimestamp() } });
   state.activeObligations = [];
   state.swappedActor = null;
   state.activeAction = null;
-  state.flushNow();
+  await state.flushNow();
   state.onDeactivate?.();
 }
 
