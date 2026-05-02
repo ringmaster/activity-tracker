@@ -4,6 +4,6 @@
   "version": "0.4.0",
   "minAppVersion": "1.4.0",
   "description": "Initiative tracking, action logging, and NPC behavior coaching for D&D 5e combat encounters.",
-  "author": "Owen",
+  "author": "Owen Winkler",
   "isDesktopOnly": false
 }
