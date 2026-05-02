@@ -142,8 +142,9 @@ export function nextTurn(state: EncounterState): void {
   const living = sorted.filter((c) => !isOutOfCombat(c));
   if (living.length === 0) return;
 
-  // Clear any actor swap
+  // Clear transient state
   state.swappedActor = null;
+  state.lastTargetIds = [];
 
   // Find our current position in the log
   const currentLogIdx = resolveCurrentTurnLogIndex(state);
@@ -239,6 +240,7 @@ function findLastStartTurn(log: any[], who: string): number {
 /** Go back to the previous turn by walking the log history. */
 export function prevTurn(state: EncounterState): void {
   state.swappedActor = null;
+  state.lastTargetIds = [];
 
   const currentLogIdx = resolveCurrentTurnLogIndex(state);
   if (currentLogIdx < 0) return;

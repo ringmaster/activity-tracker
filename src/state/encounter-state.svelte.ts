@@ -31,6 +31,8 @@ export class EncounterState {
   activeAction = $state<string | null>(null);
   /** Index of the start_turn log entry we're currently viewing. -1 = derive from currentTurn. */
   currentTurnLogIndex = $state<number>(-1);
+  /** Last selected target IDs for the current turn; persists across action commits. */
+  lastTargetIds = $state<string[]>([]);
 
   // Derived values
   sortedCombatants = $derived(

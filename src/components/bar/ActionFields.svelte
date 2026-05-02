@@ -61,7 +61,8 @@
 
   let via = $state("");
   // svelte-ignore state_referenced_locally
-  let showTargets = $state(preset === "attack");
+  // svelte-ignore state_referenced_locally
+  let showTargets = $state(preset === "attack" && encounter.lastTargetIds.length === 0);
   let showViaSuggestions = $state(false);
   let showEffectPicker = $state(false);
 
@@ -122,7 +123,18 @@
         : [],
   );
 
-  let targets = $state<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>({});
+  // Initialize target selection from last-used targets (persists within a turn)
+  let targets = $state<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>(() => {
+    const initial: Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }> = {};
+    for (const id of encounter.lastTargetIds) {
+      const c = encounter.getCombatant(id);
+      // Don't pre-select dead targets
+      if (c && !(c.conditions ?? []).includes("dead")) {
+        initial[id] = { checked: true, outcome: "full" };
+      }
+    }
+    return initial;
+  });
 
   let cancelIcon = $derived(
     preset === "attack" ? "\u2694" : preset === "cast" ? "\u2728" : "\u2764",
@@ -483,6 +495,7 @@
         },
       } as any);
 
+      encounter.lastTargetIds = selectedTargets.map((t) => t.who);
       encounter.flush();
       onDone();
       return;
@@ -593,6 +606,7 @@
       actor.tags.push(concTag);
     }
 
+    encounter.lastTargetIds = selectedTargets.map((t) => t.who);
     encounter.flush();
     onDone();
   }
