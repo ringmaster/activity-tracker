@@ -130,13 +130,20 @@
     source?: string;
   }
 
+  /** Build authoredDmg from either the dmg array or the top-level damageType/dice fields. */
+  function getDmgFromAction(action: CombatAction): AuthoredDamage[] | undefined {
+    if (action.dmg && action.dmg.length > 0) return action.dmg;
+    if (action.damageType) return [{ dice: action.dice ?? "", type: action.damageType }];
+    return undefined;
+  }
+
   /** Resolve a string action reference from the library. */
   function resolveAction(name: string): ActionSuggestion | null {
     const libAction = findLibraryAction(name);
     if (libAction) {
       return {
         name: libAction.name,
-        authoredDmg: libAction.dmg,
+        authoredDmg: getDmgFromAction(libAction),
         verb: libAction.verb,
         actionEffects: libAction.effects,
         conc: libAction.concentration,
@@ -153,7 +160,7 @@
   function actionToSuggestion(action: CombatAction): ActionSuggestion {
     return {
       name: action.name,
-      authoredDmg: action.dmg,
+      authoredDmg: getDmgFromAction(action),
       verb: action.verb,
       actionEffects: action.effects,
       conc: action.concentration,
