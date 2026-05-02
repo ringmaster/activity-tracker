@@ -3,7 +3,8 @@ import type { App, TFile } from "obsidian";
 import type { CombatAction } from "../types/encounter";
 
 export interface LibraryData {
-  actions: CombatAction[];
+  actions?: CombatAction[];
+  spells?: CombatAction[];
 }
 
 let cachedLibrary: CombatAction[] = [];
@@ -129,13 +130,32 @@ export async function addToLibrary(
   invalidateLibraryCache();
 }
 
+/** Extract actions and spells from a parsed YAML object.
+ *  Items under `spells:` get `type: "spell"` if not already set. */
+function extractFromParsed(parsed: LibraryData | null): CombatAction[] {
+  if (!parsed) return [];
+  const results: CombatAction[] = [];
+
+  if (Array.isArray(parsed.actions)) {
+    results.push(...parsed.actions);
+  }
+
+  if (Array.isArray(parsed.spells)) {
+    for (const spell of parsed.spells) {
+      if (!spell.type) spell.type = "spell";
+      results.push(spell);
+    }
+  }
+
+  return results;
+}
+
 function parseLibraryContent(content: string): CombatAction[] {
   // Try bare YAML
   try {
     const parsed = yaml.load(content) as LibraryData;
-    if (parsed?.actions && Array.isArray(parsed.actions)) {
-      return parsed.actions;
-    }
+    const results = extractFromParsed(parsed);
+    if (results.length > 0) return results;
   } catch { /* not bare YAML */ }
 
   // Try code block
@@ -143,9 +163,8 @@ function parseLibraryContent(content: string): CombatAction[] {
   if (blockMatch) {
     try {
       const parsed = yaml.load(blockMatch[1]) as LibraryData;
-      if (parsed?.actions && Array.isArray(parsed.actions)) {
-        return parsed.actions;
-      }
+      const results = extractFromParsed(parsed);
+      if (results.length > 0) return results;
     } catch { /* malformed */ }
   }
 
@@ -154,9 +173,8 @@ function parseLibraryContent(content: string): CombatAction[] {
   if (fmMatch) {
     try {
       const parsed = yaml.load(fmMatch[1]) as LibraryData;
-      if (parsed?.actions && Array.isArray(parsed.actions)) {
-        return parsed.actions;
-      }
+      const results = extractFromParsed(parsed);
+      if (results.length > 0) return results;
     } catch { /* malformed */ }
   }
 
