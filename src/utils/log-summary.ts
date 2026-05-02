@@ -12,6 +12,7 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     const actorName = encounter.getCombatant(actorId)?.name ?? actorId;
     const isSpell = !!entry.attack.spell;
     const isFailed = !!entry.attack.failed;
+    const isResolved = !!entry.attack.resolved;
     const customVerb = entry.attack.verb;
     const tgtIds = (entry.attack.tgt ?? []).map((t: any) => t.who);
     const selfOnly = isSelfOnly(actorId, tgtIds);
@@ -42,6 +43,14 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
         return name;
       })
       .join(", ");
+
+    // Resolved deferred effect: "Moonbeam (Wex) affects Bandit 1 dealing 14 radiant."
+    if (isResolved) {
+      if (selfOnly) {
+        return `${entry.attack.via} (${actorName}) resolves.`;
+      }
+      return `${entry.attack.via} (${actorName}) affects ${targetParts}.`;
+    }
 
     // Self-targeted: drop "on [self]"
     if (selfOnly) {

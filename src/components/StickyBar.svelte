@@ -183,6 +183,7 @@
           by: sourceId,
           via: tag.name,
           isSpell: true,
+          resolved: true,
           baseDmg: [{ n: dmgAmount, type: tag.damageType }],
           targets: [{ who: targetId, outcome: resolveOutcome }],
         });

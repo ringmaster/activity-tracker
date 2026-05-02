@@ -18,6 +18,8 @@ export interface AttackParams {
   slot?: number;
   conc?: boolean;
   isSpell?: boolean;
+  /** This is a resolved deferred effect, not a new action. */
+  resolved?: boolean;
   /** Effects applied during this action, for saving to the library. */
   actionEffects?: ActionEffect[];
 }
@@ -47,6 +49,7 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
   };
   if (params.verb) entry.attack.verb = params.verb;
   if (params.isSpell) entry.attack.spell = true;
+  if (params.resolved) entry.attack.resolved = true;
   if (params.save) entry.attack.save = params.save;
   state.logInsert(entry);
 
@@ -77,7 +80,7 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
   }
 
   // Persist new via+type as an action on the actor for future autocomplete
-  if (!params.spellKey) {
+  if (!params.spellKey && !params.resolved) {
     learnAction(state, params.by, params.via, params.baseDmg, params.isSpell, params.conc, params.actionEffects);
   }
 
