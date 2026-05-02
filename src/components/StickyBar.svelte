@@ -171,6 +171,7 @@
       commitHeal(encounter, {
         by: sourceId,
         via: tag.name,
+        resolved: true,
         targets: [{ who: targetId, hp: resolveAmount }],
       });
     } else if (tag.damageType && resolveAmount > 0) {

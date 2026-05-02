@@ -73,7 +73,17 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
   if (entry.heal) {
     const actorId = entry.heal.by;
     const actorName = encounter.getCombatant(actorId)?.name ?? actorId;
+    const isResolved = !!entry.heal.resolved;
     const tgtIds = entry.heal.tgt.map((t: any) => t.who);
+
+    if (isResolved) {
+      const targets = entry.heal.tgt.map((t: any) => {
+        const name = encounter.getCombatant(t.who)?.name ?? t.who;
+        return `${name} for ${t.hp}`;
+      }).join(", ");
+      return `${entry.heal.via} (${actorName}) healed ${targets}.`;
+    }
+
     if (isSelfOnly(actorId, tgtIds)) {
       const hp = entry.heal.tgt[0]?.hp ?? 0;
       return `${actorName} healed self for ${hp}.`;

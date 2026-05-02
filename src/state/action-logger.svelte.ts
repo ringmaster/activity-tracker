@@ -90,17 +90,20 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
 export interface HealParams {
   by: string;
   via?: string;
+  resolved?: boolean;
   targets: { who: string; hp: number }[];
 }
 
 export function commitHeal(state: EncounterState, params: HealParams): void {
-  state.logInsert({
+  const entry: any = {
     heal: {
       by: params.by,
       via: params.via,
       tgt: params.targets,
     },
-  });
+  };
+  if (params.resolved) entry.heal.resolved = true;
+  state.logInsert(entry);
 
   for (const t of params.targets) {
     const combatant = state.getCombatant(t.who);
