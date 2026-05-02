@@ -94,7 +94,7 @@ const context = await esbuild.context({
   treeShaking: true,
   loader: { ".svg": "text" },
   outfile: "build/main.js",
-  minify: false, // temporarily disabled for iPad diagnostics
+  minify: prod,
   mainFields: ["svelte", "browser", "module", "main"],
   conditions: ["svelte", "browser"],
   plugins: [
