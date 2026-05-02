@@ -194,21 +194,27 @@
 }
 
 .dnd-spell-desc {
+  display: block;
   cursor: pointer;
   text-align: left;
-  justify-content: unset;
   border: none;
   white-space: normal;
   word-wrap: break-word;
+  overflow: visible;
+  min-height: 0 !important;
+  min-width: 0 !important;
 }
 
 .dnd-spell-desc p {
   margin: 2px 0;
   color: #7eb8da;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .dnd-spell-desc strong {
   color: #a0d0f0;
+  font-size: 12px;
 }
 
 .dnd-numeric {
