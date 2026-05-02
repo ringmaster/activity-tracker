@@ -270,10 +270,12 @@ export async function endEncounter(state: EncounterState): Promise<void> {
 
 /** Reset the encounter to a fresh state: restore NPC HP, remove PCs,
  *  clear conditions/concentration/obligations, reset round, clear log. */
-export function resetEncounter(state: EncounterState): void {
+export async function resetEncounter(state: EncounterState): Promise<void> {
   state.active = false;
   state.round = 0;
   state.currentTurn = null;
+  state.currentTurnLogIndex = -1;
+  state.lastTargetIds = [];
   state.log = [];
   state.activeObligations = [];
   state.swappedActor = null;
@@ -300,7 +302,7 @@ export function resetEncounter(state: EncounterState): void {
         : undefined,
     }));
 
-  state.flushNow();
+  await state.flushNow();
   state.onDeactivate?.();
 }
 
