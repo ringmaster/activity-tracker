@@ -420,6 +420,32 @@
     return { combatantId: actor.id, combatantName: actor.name, conditions, tags };
   });
 
+  // Multiattack / reminder actions for the current actor
+  let turnReminders = $derived.by(() => {
+    if (!encounter.active || !encounter.currentTurn) return [];
+    const actor = encounter.effectiveActor;
+    if (!actor?.actions) return [];
+    const reminders: string[] = [];
+    for (const action of actor.actions) {
+      if (typeof action === "string") continue;
+      if (action.type === "multiattack" || action.type === "reminder") {
+        const label = action.name ?? "Reminder";
+        const desc = action.note ?? "";
+        reminders.push(desc ? `**${label}:** ${desc}` : `**${label}**`);
+      }
+    }
+    return reminders;
+  });
+
+  function renderReminder(el: HTMLElement, text: string) {
+    renderSpellDescription(el, text);
+    return {
+      update(newText: string) {
+        renderSpellDescription(el, newText);
+      },
+    };
+  }
+
   let isActionActive = $derived(encounter.activeAction !== null);
   let combatOver = $derived(encounter.allNPCsDead);
 </script>
@@ -432,6 +458,14 @@
   <ActionBar {encounter} />
 {:else}
   <DefaultBar {encounter} />
+{/if}
+
+{#if turnReminders.length > 0 && !isActionActive}
+  <div class="dnd-turn-reminders">
+    {#each turnReminders as reminder}
+      <div class="dnd-turn-reminder" use:renderReminder={reminder}></div>
+    {/each}
+  </div>
 {/if}
 
 {#if currentActorEffects}

@@ -188,13 +188,14 @@
     const results: ActionSuggestion[] = [];
 
     // Actor's actions (strings resolved from library, objects used directly)
+    // Skip multiattack/reminder actions; they surface as turn reminders, not via options
     if (preset === "attack" && actor.actions) {
       for (const entry of actor.actions) {
         if (typeof entry === "string") {
           const resolved = resolveAction(entry);
           if (resolved) results.push(resolved);
           else results.push({ name: entry });
-        } else {
+        } else if (entry.type !== "multiattack" && entry.type !== "reminder") {
           results.push(actionToSuggestion(entry));
         }
       }

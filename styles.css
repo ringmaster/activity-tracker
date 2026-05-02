@@ -230,6 +230,30 @@
 }
 }
 
+/* ---------- Turn reminders (multiattack etc) ---------- */
+.dnd-turn-reminders {
+  max-width: 768px;
+  width: 100%;
+  padding: 4px 10px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dnd-turn-reminder {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-warning);
+}
+
+.dnd-turn-reminder p {
+  margin: 2px 0;
+  color: var(--text-warning);
+}
+
+.dnd-turn-reminder strong {
+  color: #ffffff;
+}
+
 /* ---------- Actor effects strip ---------- */
 .dnd-actor-effects {
   max-width: 768px;

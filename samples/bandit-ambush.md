@@ -20,10 +20,8 @@ combatants:
         toHit: 5
         dmg: [{dice: "1d4+3", type: piercing}]
       - name: Multiattack
-        type: attack
-        toHit: 5
-        dmg: [{dice: "1d6+3", type: slashing}, {dice: "2d6", type: fire}]
-        note: "Three melee attacks: two flame tongue scimitars, one dagger"
+        type: multiattack
+        note: "Three melee attacks: two Flame Tongue Scimitars, one Dagger."
       - Grapple
       - name: Shapeshift
         type: ability
