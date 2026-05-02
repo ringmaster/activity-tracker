@@ -215,7 +215,7 @@
         } else {
           results.push({
             name: entry.name, spellDmg: entry.dmg, isSpell: true,
-            spellKey: entry.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+            spellKey: (entry.name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
             conc: entry.concentration, verb: entry.verb,
             actionEffects: entry.effects,
           });
@@ -228,15 +228,15 @@
 
   let combinedSuggestions = $derived.by((): ActionSuggestion[] => {
     const authoredMatches = via.length > 0
-      ? availableActions.filter((a) => a.name.toLowerCase().includes(via.toLowerCase()))
+      ? availableActions.filter((a) => a.name?.toLowerCase()?.includes(via.toLowerCase()))
       : availableActions;
 
     if (via.length < 2) return authoredMatches;
-    const authoredNames = new Set(authoredMatches.map((a) => a.name.toLowerCase()));
+    const authoredNames = new Set(authoredMatches.map((a) => (a.name ?? "").toLowerCase()));
 
     // Library search (includes SRD spells, homebrew, standard actions)
     const libMatches = searchLibrary(via, 15)
-      .filter((a) => !authoredNames.has(a.name.toLowerCase()))
+      .filter((a) => !authoredNames.has((a.name ?? "").toLowerCase()))
       .map((a) => actionToSuggestion(a));
 
     return [...authoredMatches, ...libMatches];
