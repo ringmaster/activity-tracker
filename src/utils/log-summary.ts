@@ -136,7 +136,12 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     return `${name} died.`;
   }
   if (entry.effect_ends) {
-    return `${entry.effect_ends.what} ended on ${encounter.getCombatant(entry.effect_ends.on)?.name ?? entry.effect_ends.on}.`;
+    const effectName = entry.effect_ends.what;
+    const targetName = encounter.getCombatant(entry.effect_ends.on)?.name ?? entry.effect_ends.on;
+    if (entry.effect_ends.reason === "concentration_dropped") {
+      return `${targetName} lost concentration on ${effectName}.`;
+    }
+    return `${effectName} ended on ${targetName}.`;
   }
   if (entry.start_round) {
     return `--- Round ${entry.start_round.n} ---`;
