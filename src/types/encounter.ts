@@ -94,7 +94,7 @@ export interface CombatAction {
   _source?: string;
 }
 
-export type TagTrigger = "start_of_turn" | "end_of_turn" | "when_damaged";
+export type TagTrigger = "start_of_turn" | "end_of_turn" | "when_damaged" | "on_ally_turn" | "on_enemy_turn";
 
 export interface CombatTag {
   id: string;

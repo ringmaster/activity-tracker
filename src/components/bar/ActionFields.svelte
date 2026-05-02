@@ -717,6 +717,8 @@
           <option value="">no trigger</option>
           <option value="start_of_turn">start of turn</option>
           <option value="end_of_turn">end of turn</option>
+          <option value="on_ally_turn">on ally turn</option>
+          <option value="on_enemy_turn">on enemy turn</option>
           <option value="when_damaged">when damaged</option>
         </select>
         <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>

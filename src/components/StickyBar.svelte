@@ -53,38 +53,58 @@
     combatantName: string;
   }
 
+  /** Check if two combatants are on the same side. */
+  function areAllies(a: typeof encounter.combatants[0], b: typeof encounter.combatants[0]): boolean {
+    const aIsPC = a.type === "pc" ? !a.friendly : !!a.friendly;
+    const bIsPC = b.type === "pc" ? !b.friendly : !!b.friendly;
+    return aIsPC === bIsPC;
+  }
+
   // Derive tag banners from combatant tags that match the current trigger moment
   let activeBanners = $derived.by((): TagBanner[] => {
     if (!encounter.active || !encounter.currentTurn) return [];
+    const currentActor = encounter.getCombatant(encounter.currentTurn);
+    if (!currentActor) return [];
 
     const banners: TagBanner[] = [];
 
-    for (const combatant of encounter.combatants) {
-      if (!combatant.tags || combatant.conditions.includes("dead")) continue;
+    for (const combatant of encounter.combatants ?? []) {
+      if (!(combatant.tags ?? []).length || (combatant.conditions ?? []).includes("dead")) continue;
 
       for (const tag of combatant.tags) {
         if (!tag.trigger) continue;
 
-        // Show start_of_turn and when_damaged tags for the current actor
-        if (tag.trigger === "start_of_turn" && combatant.id === encounter.currentTurn) {
+        // start_of_turn / end_of_turn: fires for the combatant carrying the tag
+        if ((tag.trigger === "start_of_turn" || tag.trigger === "end_of_turn")
+            && combatant.id === encounter.currentTurn) {
           banners.push({ tag, combatantId: combatant.id, combatantName: combatant.name });
         }
 
-        // Show end_of_turn tags for the current actor (proactive so DM doesn't forget)
-        if (tag.trigger === "end_of_turn" && combatant.id === encounter.currentTurn) {
-          banners.push({ tag, combatantId: combatant.id, combatantName: combatant.name });
-        }
-
-        // Concentration (when_damaged) tags show for whoever has them, always visible
-        if (tag.trigger === "when_damaged") {
-          // Only show if the combatant just took damage this turn
-          // (checked by looking for damage in the current turn's log)
-          // For now, always show concentration tags as a reminder
-          if (tag.name.startsWith("Concentrating:")) {
-            // Don't clutter; only show if this is the current actor
-            // (concentration saves happen when damaged, not on turn start)
+        // on_ally_turn: fires when any ally of the tag source takes their turn
+        if (tag.trigger === "on_ally_turn" && tag.source) {
+          const source = encounter.getCombatant(tag.source);
+          if (source && currentActor.id !== combatant.id && areAllies(source, currentActor)) {
+            banners.push({
+              tag,
+              combatantId: currentActor.id,
+              combatantName: `${currentActor.name} (${combatant.name})`,
+            });
           }
         }
+
+        // on_enemy_turn: fires when any enemy of the tag source takes their turn
+        if (tag.trigger === "on_enemy_turn" && tag.source) {
+          const source = encounter.getCombatant(tag.source);
+          if (source && !areAllies(source, currentActor)) {
+            banners.push({
+              tag,
+              combatantId: currentActor.id,
+              combatantName: `${currentActor.name} (${combatant.name})`,
+            });
+          }
+        }
+
+        // when_damaged: concentration saves, not surfaced as turn banners
       }
     }
 

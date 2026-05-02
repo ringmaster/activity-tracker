@@ -120,11 +120,14 @@ function buildNote(spell: CombatAction): string {
  * Format: "start of turn: WIS save; 2d6 fire"
  */
 function buildTagNote(spell: CombatAction, trigger: TagTrigger): string {
-  const timing = trigger === "start_of_turn"
-    ? "start of turn"
-    : trigger === "end_of_turn"
-      ? "end of turn"
-      : "when damaged";
+  const timingMap: Record<string, string> = {
+    start_of_turn: "start of turn",
+    end_of_turn: "end of turn",
+    on_ally_turn: "on ally turn",
+    on_enemy_turn: "on enemy turn",
+    when_damaged: "when damaged",
+  };
+  const timing = timingMap[trigger] ?? trigger;
 
   const parts: string[] = [];
 
