@@ -278,7 +278,9 @@ function applyDamage(state: EncounterState, targetId: string, amount: number): v
   }
 
   // Concentration save if damaged and concentrating (and still alive)
-  if (combatant.concentration && !combatant.conditions.includes("dead") && remaining > 0) {
+  const isConcentrating = combatant.concentration ||
+    (combatant.tags ?? []).some((t) => t.name.startsWith("Concentrating:"));
+  if (isConcentrating && !(combatant.conditions ?? []).includes("dead") && remaining > 0) {
     triggerConcentrationSave(state, targetId, remaining);
   }
 }
