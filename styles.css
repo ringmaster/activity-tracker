@@ -19,6 +19,18 @@
   touch-action: manipulation;
 }
 
+/* Override iOS Liquid Glass extreme border radius on all plugin inputs */
+.dnd-combat-bar-container input,
+.dnd-combat-bar-container select,
+.dnd-inline-view input,
+.dnd-inline-view select,
+.dnd-roster-overlay input,
+.dnd-roster-overlay select {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 6px !important;
+}
+
 /* ---------- Bar layout ---------- */
 .dnd-bar {
   max-width: 768px;
@@ -95,7 +107,9 @@
   min-height: 44px;
   padding: 4px 8px;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
+  border-radius: 6px !important;
+  -webkit-appearance: none;
+  appearance: none;
   background: var(--background-primary);
   color: var(--text-normal);
   font-size: 16px;
@@ -445,17 +459,15 @@
 
 /* ---------- Action bar icons ---------- */
 .dnd-action-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   width: 20px;
   height: 20px;
 }
 
 .dnd-action-icon svg {
+  display: block;
   width: 100%;
   height: 100%;
-  display: block;
 }
 
 .dnd-action-icon svg path {
@@ -468,17 +480,15 @@
 
 /* ---------- Move action buttons ---------- */
 .dnd-move-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   width: 20px;
   height: 20px;
 }
 
 .dnd-move-icon svg {
+  display: block;
   width: 100%;
   height: 100%;
-  display: block;
 }
 
 .dnd-move-icon svg path {
@@ -649,7 +659,9 @@
   min-height: 40px;
   padding: 4px 8px;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
+  border-radius: 6px !important;
+  -webkit-appearance: none;
+  appearance: none;
   background: var(--background-primary);
   color: var(--text-normal);
   font-size: 16px;
@@ -917,20 +929,27 @@
 }
 
 .dnd-dmg-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.dnd-dmg-icon svg {
-  width: 100%;
-  height: 100%;
   display: block;
 }
 
-/* Ensure SVG paths inherit fill from parent rules */
+.dnd-dmg-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .dnd-dmg-icon svg path {
   fill: inherit;
+}
+
+.dnd-dmg-icon-btn {
+  width: 20px;
+  height: 20px;
+}
+
+.dnd-dmg-icon-grid {
+  width: 32px;
+  height: 32px;
 }
 
 .dnd-dmg-type-grid {
@@ -962,17 +981,6 @@
   cursor: pointer;
 }
 
-/* Icon in the action bar button */
-.dnd-dmg-icon-btn {
-  width: 20px;
-  height: 20px;
-}
-
-/* Icon in the picker grid -- large for touch */
-.dnd-dmg-icon-grid {
-  width: 32px;
-  height: 32px;
-}
 
 .dnd-dmg-type-option:active,
 .dnd-dmg-type-option.selected {
