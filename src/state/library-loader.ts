@@ -126,8 +126,8 @@ export async function addToLibrary(
     await app.vault.modify(file as TFile, newYaml);
   }
 
-  // Invalidate cache so next load picks up changes
-  invalidateLibraryCache();
+  // Add to the in-memory cache immediately so it's available for autocomplete
+  cachedLibrary.push(action);
 }
 
 /** Extract actions and spells from a parsed YAML object.

@@ -1,5 +1,5 @@
 import type { EncounterState } from "./encounter-state.svelte";
-import type { DamageComponent, CombatAction } from "../types/encounter";
+import type { DamageComponent, CombatAction, ActionEffect } from "../types/encounter";
 import type { AttackTargetResult } from "../types/actions";
 import { applyOutcome, totalDamage, concentrationDC } from "../utils/damage-calc";
 import { findLibraryAction, addToLibrary } from "./library-loader";
@@ -18,6 +18,8 @@ export interface AttackParams {
   slot?: number;
   conc?: boolean;
   isSpell?: boolean;
+  /** Effects applied during this action, for saving to the library. */
+  actionEffects?: ActionEffect[];
 }
 
 export function commitAttack(state: EncounterState, params: AttackParams): void {
@@ -76,7 +78,7 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
 
   // Persist new via+type as an action on the actor for future autocomplete
   if (!params.spellKey) {
-    learnAction(state, params.by, params.via, params.baseDmg, params.isSpell, params.conc);
+    learnAction(state, params.by, params.via, params.baseDmg, params.isSpell, params.conc, params.actionEffects);
   }
 
   state.flush();
@@ -150,6 +152,7 @@ function learnAction(
   dmgComponents: DamageComponent[],
   isSpellAction?: boolean,
   concentration?: boolean,
+  actionEffects?: ActionEffect[],
 ): void {
   const actor = state.getCombatant(actorId);
   if (!actor || !via) return;
@@ -197,6 +200,9 @@ function learnAction(
       libAction.dmg = types.map((d) => ({ dice: "", type: d.type }));
     }
     if (concentration) libAction.concentration = true;
+    if (actionEffects && actionEffects.length > 0) {
+      libAction.effects = actionEffects;
+    }
 
     addToLibrary(state.app, state.libraryPaths, libAction);
 
@@ -223,6 +229,7 @@ function learnAction(
     type: isSpellAction ? "spell" : "attack",
     dmg: types.length > 0 ? types : undefined,
     concentration: concentration || undefined,
+    effects: actionEffects && actionEffects.length > 0 ? actionEffects : undefined,
   };
 
   if (isSpellAction) {

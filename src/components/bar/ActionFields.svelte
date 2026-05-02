@@ -502,6 +502,28 @@
       .map((c) => c.condition)
       .filter((c) => c.length > 0);
 
+    // Build ActionEffect[] from the current effects for saving to the library
+    const learnableEffects: ActionEffect[] = [];
+    for (const eff of effects) {
+      if (eff.type === "tag") {
+        learnableEffects.push({
+          type: "tag",
+          name: (eff as TagEffect).name,
+          on: "target",
+          trigger: (eff as TagEffect).trigger || undefined,
+          note: (eff as TagEffect).note || undefined,
+        });
+      } else if (eff.type === "condition") {
+        learnableEffects.push({
+          type: "condition",
+          name: (eff as ConditionEffect).condition,
+          on: "target",
+        });
+      } else if (eff.type === "concentration") {
+        learnableEffects.push({ type: "concentration" });
+      }
+    }
+
     // Log as attack/spell if there's damage or it's an action
     if (baseDmg.length > 0 || preset === "attack" || preset === "cast" || selectedVerb) {
       commitAttack(encounter, {
@@ -513,6 +535,7 @@
         conc: isConc || undefined,
         isSpell: isSpell || preset === "cast" || undefined,
         verb: selectedVerb,
+        actionEffects: learnableEffects.length > 0 ? learnableEffects : undefined,
       });
     }
 
