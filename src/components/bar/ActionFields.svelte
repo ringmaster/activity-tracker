@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { MarkdownRenderer } from "obsidian";
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction } from "../../types/encounter";
+  import { renderSpellDescription } from "../../utils/spell-renderer";
   import { commitAttack, commitHeal } from "../../state/action-logger.svelte";
   import { generateSpellTag, generateConcentrationTag } from "../../data/spell-tag-generator";
   import { findLibraryAction, searchLibrary } from "../../state/library-loader";
@@ -80,36 +80,10 @@
   let spellDescEl = $state<HTMLElement | null>(null);
   let showSpellMeta = $state(false);
 
-  /** Wrap words containing digits in <span class="dnd-numeric">. */
-  function highlightNumbers(el: HTMLElement) {
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    const replacements: { node: Text; html: string }[] = [];
-    let node: Text | null;
-    while ((node = walker.nextNode() as Text | null)) {
-      if (/\d/.test(node.textContent ?? "")) {
-        const html = (node.textContent ?? "").replace(
-          /\b(\S*\d\S*)\b/g,
-          '<span class="dnd-numeric">$1</span>',
-        );
-        replacements.push({ node, html });
-      }
-    }
-    for (const { node, html } of replacements) {
-      const span = document.createElement("span");
-      span.innerHTML = html;
-      node.parentNode?.replaceChild(span, node);
-    }
-  }
-
-  // Render spell description as markdown when it changes
+  // Render spell description as markdown with highlighting when it changes
   $effect(() => {
     if (spellDescEl && spellDesc) {
-      spellDescEl.empty();
-      MarkdownRenderer.renderMarkdown(spellDesc, spellDescEl, "", null as any);
-      // Post-process: highlight numbers
-      requestAnimationFrame(() => {
-        if (spellDescEl) highlightNumbers(spellDescEl);
-      });
+      renderSpellDescription(spellDescEl, spellDesc);
     }
     showSpellMeta = false;
   });

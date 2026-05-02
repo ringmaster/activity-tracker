@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { MarkdownRenderer } from "obsidian";
   import type { EncounterState } from "../state/encounter-state.svelte";
   import type { CombatTag } from "../types/encounter";
   import { findLibraryAction } from "../state/library-loader";
+  import { renderSpellDescription } from "../utils/spell-renderer";
   import { summarizeLogEntry } from "../utils/log-summary";
   import DefaultBar from "./bar/DefaultBar.svelte";
   import ActionBar from "./bar/ActionBar.svelte";
@@ -36,14 +36,12 @@
   function renderSpellDesc(el: HTMLElement, spellName: string) {
     const spell = findLibraryAction(spellName);
     if (!spell?.desc || !el) return;
-    el.innerHTML = "";
-    MarkdownRenderer.renderMarkdown(spell.desc, el, "", null as any);
+    renderSpellDescription(el, spell.desc);
     return {
       update(newName: string) {
         const s = findLibraryAction(newName);
         if (!s?.desc) return;
-        el.innerHTML = "";
-        MarkdownRenderer.renderMarkdown(s.desc, el, "", null as any);
+        renderSpellDescription(el, s.desc);
       },
     };
   }
