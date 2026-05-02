@@ -341,12 +341,17 @@ export function dropConcentration(state: EncounterState, casterId: string): void
       },
     });
 
-    // Cascade: remove all tags sourced from this caster for this spell on ALL combatants
+    // Cascade: remove all tags for this spell on ALL combatants (including the caster)
     for (const c of state.combatants ?? []) {
-      if (c.id === casterId) continue;
       const before = c.tags?.length ?? 0;
-      c.tags = (c.tags ?? []).filter((t) => !(t.source === casterId && t.name === spellName));
-      if ((c.tags?.length ?? 0) < before) {
+      c.tags = (c.tags ?? []).filter((t) => {
+        // Remove tags sourced from this caster with the spell name
+        if (t.source === casterId && t.name === spellName) return false;
+        // Also remove tags with the spell name on the caster themselves (self-targeted effects)
+        if (c.id === casterId && t.name === spellName) return false;
+        return true;
+      });
+      if (c.id !== casterId && (c.tags?.length ?? 0) < before) {
         state.logInsert({
           effect_ends: {
             what: spellName,
