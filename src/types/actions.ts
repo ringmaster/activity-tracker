@@ -26,6 +26,9 @@ export interface AttackEntry {
   attack: {
     by: string;
     via: string;
+    verb?: string;
+    spell?: boolean;
+    failed?: boolean;
     save?: { stat: string; dc: number; on_pass?: string };
     tgt: AttackTargetResult[];
   };

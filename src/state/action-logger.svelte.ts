@@ -3,6 +3,7 @@ import type { DamageComponent, CombatAction } from "../types/encounter";
 import type { AttackTargetResult } from "../types/actions";
 import { applyOutcome, totalDamage, concentrationDC } from "../utils/damage-calc";
 import { findSpell } from "../data/spell-lookup";
+import { findLibraryAction, addToLibrary } from "./library-loader";
 import { updatePartyMember } from "./party-loader";
 import { nowTimestamp } from "../utils/time";
 import { createObligation } from "./obligation-engine.svelte";
@@ -10,6 +11,7 @@ import { createObligation } from "./obligation-engine.svelte";
 export interface AttackParams {
   by: string;
   via: string;
+  verb?: string;
   baseDmg: DamageComponent[];
   save?: { stat: string; dc: number; on_pass?: string };
   targets: { who: string; outcome: "full" | "half" | "zero" }[];
@@ -23,8 +25,8 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
   const hasDamage = params.baseDmg.some((d) => d.n > 0);
 
   const tgt: AttackTargetResult[] = params.targets.map((t) => {
-    if (!hasDamage && !params.isSpell) {
-      // No damage on a weapon attack = miss
+    if (!hasDamage && !params.isSpell && !params.verb) {
+      // No damage on a plain weapon attack = miss
       return { who: t.who, hit: "zero" as const };
     }
     const dmg = applyOutcome(params.baseDmg, t.outcome);
@@ -42,6 +44,7 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
       tgt,
     },
   };
+  if (params.verb) entry.attack.verb = params.verb;
   if (params.isSpell) entry.attack.spell = true;
   if (params.save) entry.attack.save = params.save;
   state.logInsert(entry);
@@ -154,64 +157,90 @@ function learnAction(
 
   const lower = via.toLowerCase();
 
-  // Already known as an action?
-  if (actor.actions?.some((a) => a.name.toLowerCase() === lower)) return;
-
-  // Already known as a spell?
-  if (actor.spells?.some((s) =>
+  // Already known as an action or spell (string or object)?
+  const knownAction = (actor.actions ?? []).some((a) =>
+    (typeof a === "string" ? a : a.name).toLowerCase() === lower,
+  );
+  const knownSpell = (actor.spells ?? []).some((s) =>
     (typeof s === "string" ? s : s.name).toLowerCase() === lower,
-  )) return;
+  );
+  if (knownAction || knownSpell) return;
+
+  // Already in the library?
+  if (findLibraryAction(via)) {
+    // Just add a string reference to the actor
+    if (isSpellAction) {
+      if (!actor.spells) actor.spells = [];
+      actor.spells.push(via);
+    } else {
+      if (!actor.actions) actor.actions = [];
+      actor.actions.push(via);
+    }
+    if (actor.type === "pc") {
+      updatePartyMember(state.app, state.partyNotePath, actor.id,
+        isSpellAction ? undefined : [{ name: via, type: "attack" }],
+        isSpellAction ? [via] : undefined,
+      );
+    }
+    return;
+  }
 
   // If it matches an SRD spell, store as a spell name string
   const srd = findSpell(via);
   if (srd) {
     if (!actor.spells) actor.spells = [];
     actor.spells.push(srd.name);
-
     if (actor.type === "pc") {
       updatePartyMember(state.app, state.partyNotePath, actor.id, undefined, [srd.name]);
     }
     return;
   }
 
-  // Spells that aren't in the SRD get stored as full spell objects on the combatant
-  if (isSpellAction) {
-    if (!actor.spells) actor.spells = [];
+  // For PCs: add to the library, then reference by name
+  if (actor.type === "pc") {
     const types = dmgComponents.filter((d) => d.type);
-    const spellDef: any = {
+    const libAction: CombatAction = {
       name: via,
-      type: "attack",
+      type: isSpellAction ? "spell" : "attack",
     };
     if (types.length > 0) {
-      spellDef.dmg = types.map((d) => ({ n: d.n, type: d.type }));
+      libAction.dmg = types.map((d) => ({ dice: "", type: d.type }));
     }
-    if (concentration) {
-      spellDef.concentration = true;
-    }
-    actor.spells.push(spellDef);
+    if (concentration) libAction.concentration = true;
 
-    if (actor.type === "pc") {
+    addToLibrary(state.app, state.libraryPath, libAction);
+
+    // Add string reference to the actor
+    if (isSpellAction) {
+      if (!actor.spells) actor.spells = [];
+      actor.spells.push(via);
       updatePartyMember(state.app, state.partyNotePath, actor.id, undefined, [via]);
+    } else {
+      if (!actor.actions) actor.actions = [];
+      actor.actions.push(via);
+      updatePartyMember(state.app, state.partyNotePath, actor.id, [{ name: via, type: "attack" }]);
     }
     return;
   }
 
-  // Otherwise store as a weapon/ability action
-  if (!actor.actions) actor.actions = [];
+  // For NPCs: store inline on the combatant (NPC-specific)
   const types = dmgComponents
     .filter((d) => d.type)
     .map((d) => ({ dice: "", type: d.type }));
 
-  const newAction = {
+  const newAction: CombatAction = {
     name: via,
-    type: "attack",
+    type: isSpellAction ? "spell" : "attack",
     dmg: types.length > 0 ? types : undefined,
+    concentration: concentration || undefined,
   };
-  actor.actions.push(newAction);
 
-  // Persist to party file for PCs
-  if (actor.type === "pc") {
-    updatePartyMember(state.app, state.partyNotePath, actor.id, [newAction]);
+  if (isSpellAction) {
+    if (!actor.spells) actor.spells = [];
+    actor.spells.push(newAction as any);
+  } else {
+    if (!actor.actions) actor.actions = [];
+    actor.actions.push(newAction);
   }
 }
 

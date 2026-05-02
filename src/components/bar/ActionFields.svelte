@@ -1,10 +1,11 @@
 <script lang="ts">
   import { MarkdownRenderer } from "obsidian";
   import type { EncounterState } from "../../state/encounter-state.svelte";
-  import type { DamageComponent, AuthoredDamage, TagTrigger } from "../../types/encounter";
+  import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction } from "../../types/encounter";
   import { commitAttack, commitHeal } from "../../state/action-logger.svelte";
   import { searchSpells, findSpell, type SrdSpell } from "../../data/spell-lookup";
   import { generateSpellTag, generateConcentrationTag } from "../../data/spell-tag-generator";
+  import { getCachedLibrary, findLibraryAction, searchLibrary } from "../../state/library-loader";
   import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
   import DamageTypeIcon from "../shared/DamageTypeIcon.svelte";
 
@@ -73,6 +74,7 @@
   let spellKey = $state("");
   let isConc = $state(false);
   let isSpell = $state(false);
+  let selectedVerb = $state<string | undefined>(undefined);
   let diceHint = $state<string | null>(null);
   let spellDesc = $state<string | null>(null);
   let spellDescEl = $state<HTMLElement | null>(null);
@@ -109,7 +111,40 @@
     isSpell?: boolean;
     spellKey?: string;
     conc?: boolean;
+    verb?: string;
+    actionEffects?: ActionEffect[];
     srdSpell?: SrdSpell;
+    note?: string;
+  }
+
+  /** Resolve a string action reference from the library. */
+  function resolveAction(name: string): ActionSuggestion | null {
+    const libAction = findLibraryAction(name);
+    if (libAction) {
+      return {
+        name: libAction.name,
+        authoredDmg: libAction.dmg,
+        verb: libAction.verb,
+        actionEffects: libAction.effects,
+        conc: libAction.concentration,
+        isSpell: libAction.type === "spell",
+        note: libAction.note,
+      };
+    }
+    return null;
+  }
+
+  /** Convert a CombatAction object to a suggestion. */
+  function actionToSuggestion(action: CombatAction): ActionSuggestion {
+    return {
+      name: action.name,
+      authoredDmg: action.dmg,
+      verb: action.verb,
+      actionEffects: action.effects,
+      conc: action.concentration,
+      isSpell: action.type === "spell",
+      note: action.note,
+    };
   }
 
   let availableActions = $derived.by((): ActionSuggestion[] => {
@@ -117,24 +152,41 @@
     if (!actor) return [];
     const results: ActionSuggestion[] = [];
 
-    // For attack preset, include weapon/ability actions
-    if (preset === "attack") {
-      if (actor.actions) {
-        for (const action of actor.actions) {
-          results.push({ name: action.name, authoredDmg: action.dmg });
-        }
-      }
-      if (actor.behavior?.extra_actions) {
-        for (const action of actor.behavior.extra_actions) {
-          results.push({ name: action.name, authoredDmg: action.dmg });
+    // Actor's actions (strings resolved from library, objects used directly)
+    if (preset === "attack" && actor.actions) {
+      for (const entry of actor.actions) {
+        if (typeof entry === "string") {
+          const resolved = resolveAction(entry);
+          if (resolved) results.push(resolved);
+          else results.push({ name: entry });
+        } else {
+          results.push(actionToSuggestion(entry));
         }
       }
     }
 
-    // All presets include the actor's spells
+    // Behavior extra_actions (always inline objects)
+    if (preset === "attack" && actor.behavior?.extra_actions) {
+      for (const action of actor.behavior.extra_actions) {
+        results.push({
+          name: action.name,
+          authoredDmg: action.dmg,
+        });
+      }
+    }
+
+    // Actor's spells (strings from library then SRD, objects used directly)
     if (actor.spells) {
       for (const entry of actor.spells) {
         if (typeof entry === "string") {
+          // Try library first
+          const libResolved = resolveAction(entry);
+          if (libResolved) {
+            libResolved.isSpell = true;
+            results.push(libResolved);
+            continue;
+          }
+          // Then SRD
           const srd = findSpell(entry);
           if (srd) {
             results.push({
@@ -149,7 +201,8 @@
           results.push({
             name: entry.name, spellDmg: entry.dmg, isSpell: true,
             spellKey: entry.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-            conc: entry.concentration,
+            conc: entry.concentration, verb: entry.verb,
+            actionEffects: entry.effects,
           });
         }
       }
@@ -163,19 +216,28 @@
       ? availableActions.filter((a) => a.name.toLowerCase().includes(via.toLowerCase()))
       : availableActions;
 
-    if (via.length < 3) return authoredMatches;
-
-    const srdMatches = searchSpells(via);
+    if (via.length < 2) return authoredMatches;
     const authoredNames = new Set(authoredMatches.map((a) => a.name.toLowerCase()));
-    const srdSuggestions: ActionSuggestion[] = srdMatches
-      .filter((s) => !authoredNames.has(s.name.toLowerCase()))
-      .map((s) => ({
-        name: s.name,
-        authoredDmg: s.damageType ? [{ dice: s.dice ?? "", type: s.damageType }] : undefined,
-        isSpell: true, conc: s.concentration, srdSpell: s,
-      }));
 
-    return [...authoredMatches, ...srdSuggestions];
+    // Library actions (available to everyone)
+    const libMatches = searchLibrary(via)
+      .filter((a) => !authoredNames.has(a.name.toLowerCase()))
+      .map((a) => actionToSuggestion(a));
+    for (const m of libMatches) authoredNames.add(m.name.toLowerCase());
+
+    // SRD spells (after 3 chars)
+    let srdSuggestions: ActionSuggestion[] = [];
+    if (via.length >= 3) {
+      srdSuggestions = searchSpells(via)
+        .filter((s) => !authoredNames.has(s.name.toLowerCase()))
+        .map((s) => ({
+          name: s.name,
+          authoredDmg: s.damageType ? [{ dice: s.dice ?? "", type: s.damageType }] : undefined,
+          isSpell: true, conc: s.concentration, srdSpell: s,
+        }));
+    }
+
+    return [...authoredMatches, ...libMatches, ...srdSuggestions];
   });
 
   let targetLabel = $derived.by(() => {
@@ -201,27 +263,27 @@
     via = action.name;
     isSpell = !!action.isSpell;
     selectedSrdSpell = action.srdSpell ?? null;
+    selectedVerb = action.verb;
 
+    // --- SRD spell handling ---
     if (action.srdSpell) {
       spellDesc = action.srdSpell.desc;
       if (action.srdSpell.damageType && preset !== "heal") {
         setDamageEffects([{ dice: "", type: action.srdSpell.damageType }]);
       }
       if (action.srdSpell.concentration) isConc = true;
-      // SRD spells show dice in the description; set hint from dice+type if available
       diceHint = action.srdSpell.dice && action.srdSpell.damageType
         ? `${action.srdSpell.dice} ${action.srdSpell.damageType}`
         : null;
 
-      // Auto-generate a tag effect if the spell has ongoing effects
+      // Auto-generate a tag effect from SRD description
       const autoTag = generateSpellTag(
         action.srdSpell,
         encounter.effectiveActor?.id ?? "",
         [],
       );
       if (autoTag && autoTag.trigger) {
-        const existingTag = effects.find((e) => e.type === "tag") as TagEffect | undefined;
-        if (!existingTag) {
+        if (!effects.some((e) => e.type === "tag")) {
           effects = [...effects, {
             type: "tag",
             name: autoTag.name,
@@ -233,7 +295,8 @@
     } else {
       spellDesc = null;
       selectedSrdSpell = null;
-      // Build dice hint from authored damage
+
+      // Dice hint from authored damage
       if (action.authoredDmg && action.authoredDmg.length > 0) {
         const parts = action.authoredDmg
           .filter((d) => d.dice)
@@ -242,12 +305,46 @@
       } else {
         diceHint = null;
       }
+
+      // Set damage type effects from authored damage
       const dmgSource = action.authoredDmg ?? action.spellDmg?.map((d) => ({ dice: "", type: d.type }));
       if (dmgSource && dmgSource.length > 0 && preset !== "heal") {
         setDamageEffects(dmgSource);
       }
+
       if (action.isSpell && action.spellKey) spellKey = action.spellKey;
       if (action.conc) isConc = true;
+    }
+
+    // --- Auto-populate structured effects from action definition ---
+    if (action.actionEffects && action.actionEffects.length > 0) {
+      for (const ae of action.actionEffects) {
+        if (ae.type === "tag" && !effects.some((e) => e.type === "tag" && (e as TagEffect).name === ae.name)) {
+          effects = [...effects, {
+            type: "tag",
+            name: ae.name ?? via,
+            note: ae.note ?? "",
+            trigger: ae.trigger ?? "",
+          }];
+        } else if (ae.type === "condition" && !effects.some((e) => e.type === "condition" && (e as ConditionEffect).condition === ae.name)) {
+          // Conditions are now added as tags for unified cleanup
+          effects = [...effects, {
+            type: "tag",
+            name: ae.name ?? "",
+            note: ae.note ?? "",
+            trigger: ae.trigger ?? "",
+          }];
+        } else if (ae.type === "concentration" && !effects.some((e) => e.type === "concentration")) {
+          effects = [...effects, { type: "concentration" }];
+          isConc = true;
+        }
+      }
+    }
+
+    // Concentration from action/spell definition
+    if (action.conc && !effects.some((e) => e.type === "concentration")) {
+      effects = [...effects, { type: "concentration" }];
+      isConc = true;
     }
 
     showViaSuggestions = false;
@@ -375,6 +472,7 @@
         attack: {
           by: actor.id,
           via: via || (preset === "attack" ? "attack" : "spell"),
+          verb: selectedVerb,
           spell: isSpellAction || undefined,
           failed: true,
           tgt: selectedTargets.map((t) => ({ who: t.who, hit: "zero" as const })),
@@ -402,8 +500,8 @@
       .map((c) => c.condition)
       .filter((c) => c.length > 0);
 
-    // Log as attack/spell if there's damage or it's a spell/attack action
-    if (baseDmg.length > 0 || preset === "attack" || preset === "cast") {
+    // Log as attack/spell if there's damage or it's an action
+    if (baseDmg.length > 0 || preset === "attack" || preset === "cast" || selectedVerb) {
       commitAttack(encounter, {
         by: actor.id,
         via: via || (preset === "attack" ? "attack" : "spell"),
@@ -412,6 +510,7 @@
         spellKey: spellKey || undefined,
         conc: isConc || undefined,
         isSpell: isSpell || preset === "cast" || undefined,
+        verb: selectedVerb,
       });
     }
 
@@ -666,9 +765,13 @@
           <span class="dnd-via-detail">
             {action.spellDmg.map((d) => `${d.n} ${d.type}`).join(" + ")}
           </span>
+        {:else if action.note}
+          <span class="dnd-via-detail">{action.note}</span>
         {/if}
         {#if action.isSpell}
           <span class="dnd-via-badge">spell</span>
+        {:else if action.verb}
+          <span class="dnd-via-badge">{action.verb}</span>
         {/if}
       </button>
     {/each}

@@ -81,6 +81,7 @@ export class EncounterState {
 
   /** Path to the party note for persisting learned PC actions. */
   partyNotePath: string = "party.md";
+  libraryPath: string = "library.md";
 
   // File reference for YAML persistence
   app: App;

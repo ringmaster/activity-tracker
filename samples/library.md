@@ -1,0 +1,118 @@
+# Actions Library
+
+Standard actions and abilities available to all combatants.
+
+```yaml
+actions:
+  # --- Standard Actions ---
+  - name: Grapple
+    type: ability
+    verb: "grapples"
+    note: "Athletics vs target's Athletics or Acrobatics."
+    effects:
+      - type: tag
+        name: grappled
+        on: target
+      - type: tag
+        name: grappling
+        on: self
+
+  - name: Shove
+    type: ability
+    verb: "shoves"
+    note: "Athletics vs target's Athletics or Acrobatics. Target falls prone or is pushed 5ft."
+    effects:
+      - type: tag
+        name: prone
+        on: target
+
+  - name: Shove Aside
+    type: ability
+    verb: "shoves aside"
+    note: "Athletics vs target's Athletics or Acrobatics. Move target 5ft to the side."
+
+  - name: Disarm
+    type: ability
+    verb: "disarms"
+    note: "Attack roll vs target's Athletics or Acrobatics. Target drops one held item."
+
+  - name: Overrun
+    type: ability
+    verb: "overruns"
+    note: "Athletics vs target's Athletics. Move through target's space on success."
+
+  - name: Tumble
+    type: ability
+    verb: "tumbles past"
+    note: "Acrobatics vs target's Acrobatics. Move through target's space on success."
+
+  # --- Bonus/Free Actions ---
+  - name: Dodge
+    type: ability
+    verb: "dodges"
+    note: "Until next turn: attacks against have disadvantage; DEX saves with advantage."
+    effects:
+      - type: tag
+        name: dodging
+        on: self
+        note: "Attacks against have disadvantage; DEX saves with advantage"
+
+  - name: Help
+    type: ability
+    verb: "helps"
+    note: "Ally gains advantage on next ability check or attack roll against the target."
+
+  - name: Hide
+    type: ability
+    verb: "hides"
+    note: "Stealth check. Unseen and heavily obscured."
+    effects:
+      - type: tag
+        name: hidden
+        on: self
+        note: "Stealth vs passive Perception to detect"
+
+  - name: Dash
+    type: ability
+    verb: "dashes"
+    note: "Double movement this turn."
+
+  - name: Disengage
+    type: ability
+    verb: "disengages"
+    note: "Movement doesn't provoke opportunity attacks this turn."
+
+  - name: Ready
+    type: ability
+    verb: "readies an action"
+    note: "Specify trigger and action. Uses reaction when triggered."
+
+  - name: Use an Object
+    type: ability
+    verb: "uses an object"
+    note: "Interact with an object that requires an action."
+
+  # --- Common Combat Maneuvers ---
+  - name: Opportunity Attack
+    type: attack
+    verb: "takes an opportunity attack against"
+    note: "Reaction. Target leaves reach without disengaging."
+
+  - name: Two-Weapon Attack
+    type: attack
+    verb: "attacks (off-hand)"
+    note: "Bonus action. No ability modifier to damage unless negative."
+
+  # --- Environmental / Improvised ---
+  - name: Improvised Weapon
+    type: attack
+    verb: "attacks"
+    dmg: [{dice: "1d4", type: bludgeoning}]
+    note: "Not proficient unless similar to a weapon the attacker is proficient with."
+
+  - name: Unarmed Strike
+    type: attack
+    verb: "strikes"
+    dmg: [{dice: "1+STR", type: bludgeoning}]
+    note: "Punch, kick, headbutt, or similar."
+```

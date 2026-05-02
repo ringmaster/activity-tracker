@@ -43,15 +43,34 @@ export interface Behavior {
   spell_preferences?: SpellPreference[];
 }
 
+/** An effect that auto-populates the action bar when this action is selected. */
+export interface ActionEffect {
+  type: "tag" | "condition" | "concentration";
+  /** For tag/condition: the name of the tag or condition to apply. */
+  name?: string;
+  /** Who receives the effect: "target" or "self". Default: "target". */
+  on?: "target" | "self";
+  /** For tags: trigger timing. */
+  trigger?: TagTrigger;
+  /** For tags: reminder note shown in banners. */
+  note?: string;
+}
+
 export interface CombatAction {
   name: string;
   type: string;
+  /** Custom verb for the log, e.g., "grapples", "shoves". */
+  verb?: string;
   dmg?: AuthoredDamage[];
   save?: SaveInfo;
   area?: string;
+  /** Structured effects that auto-populate the bar on selection. */
+  effects?: ActionEffect[];
+  /** Legacy string effect description. */
   effect?: string;
   note?: string;
   slot?: number;
+  concentration?: boolean;
 }
 
 export type TagTrigger = "start_of_turn" | "end_of_turn" | "when_damaged";
@@ -81,8 +100,9 @@ export interface Combatant {
   concentration: { spell: string; line_ref: number } | null;
   spell_slots?: Record<number, { current: number; max: number }>;
   legendary_actions?: { max: number; current: number } | null;
-  actions?: CombatAction[];
-  /** Spells known by this combatant. Strings are looked up from SRD; objects are full definitions. */
+  /** Actions known by this combatant. Strings are resolved from the library. */
+  actions?: (string | CombatAction)[];
+  /** Spells known by this combatant. Strings are looked up from library, then SRD. */
   spells?: (string | Spell)[];
   behavior?: Behavior;
   recharge?: Record<string, boolean>;
@@ -106,7 +126,7 @@ export interface AuthoredCombatant {
   /** Authored as plain numbers (max slots); normalized to {current, max} at load. */
   spell_slots?: Record<number, number | { current: number; max: number }>;
   legendary_actions?: { max: number; current: number } | null;
-  actions?: CombatAction[];
+  actions?: (string | CombatAction)[];
   spells?: (string | Spell)[];
   behavior?: Behavior;
 }
@@ -131,12 +151,14 @@ export interface SpellObligation {
 export interface Spell {
   name: string;
   type: string;
+  verb?: string;
   range?: string;
   concentration?: boolean;
   duration_rounds?: number;
   obligation?: SpellObligation;
   save?: SaveInfo;
   dmg?: DamageComponent[];
+  effects?: ActionEffect[];
   effect?: string;
 }
 

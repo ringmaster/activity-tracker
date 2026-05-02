@@ -6,20 +6,25 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     const actorName = encounter.getCombatant(entry.attack.by)?.name ?? entry.attack.by;
     const isSpell = !!entry.attack.spell;
     const isFailed = !!entry.attack.failed;
-    const allNoDamage = entry.attack.tgt.every((t: any) => !t.dmg || t.dmg.length === 0);
+    const customVerb = entry.attack.verb;
+    const allNoDamage = (entry.attack.tgt ?? []).every((t: any) => !t.dmg || t.dmg.length === 0);
 
-    const targetNames = entry.attack.tgt
+    const targetNames = (entry.attack.tgt ?? [])
       .map((t: any) => encounter.getCombatant(t.who)?.name ?? t.who)
       .join(", ");
 
+    // Failed actions
     if (isFailed) {
+      if (customVerb) {
+        return `${actorName} fails to ${customVerb.replace(/s$/, "")} ${targetNames}.`;
+      }
       if (isSpell) {
         return `${actorName} cast ${entry.attack.via} on ${targetNames}. Failed.`;
       }
       return `${actorName} missed ${targetNames} with ${entry.attack.via}.`;
     }
 
-    const targetParts = entry.attack.tgt
+    const targetParts = (entry.attack.tgt ?? [])
       .map((t: any) => {
         const name = encounter.getCombatant(t.who)?.name ?? t.who;
         if (t.dmg && t.dmg.length > 0) {
@@ -30,6 +35,10 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
       })
       .join(", ");
 
+    // Custom verb: "Bandit 1 grapples Wex."
+    if (customVerb) {
+      return `${actorName} ${customVerb} ${targetParts}.`;
+    }
     if (isSpell) {
       return `${actorName} cast ${entry.attack.via} on ${targetParts}.`;
     }

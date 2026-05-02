@@ -13,16 +13,19 @@ import InlineView from "./components/InlineView.svelte";
 import StickyBar from "./components/StickyBar.svelte";
 import { EncounterState } from "./state/encounter-state.svelte";
 import { parseEncounterYaml } from "./state/yaml-bridge";
+import { loadLibrary } from "./state/library-loader";
 import { expandCombatants } from "./utils/id-generator";
 
 interface ActivityTrackerSettings {
   partyNotePath: string;
+  libraryPath: string;
   codeBlockLanguage: string;
   debugOverlay: boolean;
 }
 
 const DEFAULT_SETTINGS: ActivityTrackerSettings = {
   partyNotePath: "party.md",
+  libraryPath: "library.md",
   codeBlockLanguage: "dnd-combat",
   debugOverlay: false,
 };
@@ -83,6 +86,9 @@ export default class ActivityTrackerPlugin extends Plugin {
     this.addSettingTab(new ActivityTrackerSettingTab(this.app, this));
 
     this.debug.log(`onload: platform=${navigator.userAgent.includes("Mobile") ? "mobile" : "desktop"}`);
+
+    // Load actions library
+    loadLibrary(this.app, this.settings.libraryPath);
 
     // Register the code block processor
     this.registerMarkdownCodeBlockProcessor(
@@ -251,6 +257,7 @@ export default class ActivityTrackerPlugin extends Plugin {
       );
       state.onDeactivate = () => this.hideBar();
       state.partyNotePath = this.settings.partyNotePath;
+      state.libraryPath = this.settings.libraryPath;
       this.encounterStates.set(key, state);
     }
 
@@ -473,6 +480,19 @@ class ActivityTrackerSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.partyNotePath)
           .onChange(async (value) => {
             this.plugin.settings.partyNotePath = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Actions library path")
+      .setDesc("Path to the vault note containing the actions/spells library (e.g., library.md)")
+      .addText((text) =>
+        text
+          .setPlaceholder("library.md")
+          .setValue(this.plugin.settings.libraryPath)
+          .onChange(async (value) => {
+            this.plugin.settings.libraryPath = value;
             await this.plugin.saveSettings();
           }),
       );
