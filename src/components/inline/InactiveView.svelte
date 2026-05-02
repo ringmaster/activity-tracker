@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import { resetEncounter } from "../../state/combat-engine.svelte";
+  import { invalidateLibraryCache, loadLibrary } from "../../state/library-loader";
   import { summarizeLogEntry } from "../../utils/log-summary";
   import CombatantRow from "./CombatantRow.svelte";
 
@@ -77,6 +78,13 @@
         {/if}
       </div>
 
+      <button
+        class="dnd-show-log-btn"
+        onclick={async () => {
+          invalidateLibraryCache();
+          await loadLibrary(encounter.app, encounter.libraryPaths);
+        }}
+      >Reload library</button>
       {#if hasBeenStarted}
         <button
           class="dnd-show-log-btn"
