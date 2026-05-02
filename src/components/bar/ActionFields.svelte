@@ -625,6 +625,8 @@
 
     // Apply tag effects to targets
     const tagEffects = effects.filter((e) => e.type === "tag") as TagEffect[];
+    // All tags from this commit share a castId for cascade cleanup
+    const castId = `cast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     if (tagEffects.length > 0) {
       const affectedTargetIds = selectedTargets.map((t) => t.who);
       for (const tagEffect of tagEffects) {
@@ -645,6 +647,7 @@
             trigger: tagEffect.trigger || undefined,
             onTrigger: tagEffect.note || undefined,
             autoRemove: "manual",
+            castId,
             damageType: tagAny._damageType || undefined,
             dice: tagAny._dice || undefined,
             save: tagAny._save || undefined,
@@ -661,6 +664,7 @@
             trigger: tagEffect.trigger || undefined,
             onTrigger: tagEffect.note || undefined,
             autoRemove: "manual",
+            castId,
           });
         } else {
           // Tag goes on each selected target
@@ -675,6 +679,7 @@
               trigger: tagEffect.trigger || undefined,
               onTrigger: tagEffect.note || undefined,
               autoRemove: "manual",
+            castId,
             });
           }
         }
@@ -697,6 +702,7 @@
     // Auto-add concentration tag to the caster
     if (isConc) {
       const concTag = generateConcentrationTag(via, actor.id);
+      concTag.castId = castId;
       actor.tags.push(concTag);
     }
 

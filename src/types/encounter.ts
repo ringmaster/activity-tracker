@@ -120,6 +120,8 @@ export interface CombatTag {
   isHeal?: boolean;
   /** Who the deferred effect resolves against (target combatant ID). */
   resolveTarget?: string;
+  /** Groups tags from the same action commit for cascade cleanup. */
+  castId?: string;
 }
 
 export interface Combatant {
