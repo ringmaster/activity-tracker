@@ -132,6 +132,7 @@
     spellKey?: string;
     conc?: boolean;
     verb?: string;
+    toHit?: number;
     actionEffects?: ActionEffect[];
     libAction?: CombatAction;
     note?: string;
@@ -153,6 +154,7 @@
         name: libAction.name,
         authoredDmg: getDmgFromAction(libAction),
         verb: libAction.verb,
+        toHit: libAction.toHit,
         actionEffects: libAction.effects,
         conc: libAction.concentration,
         isSpell: libAction.type === "spell",
@@ -170,6 +172,7 @@
       name: action.name,
       authoredDmg: getDmgFromAction(action),
       verb: action.verb,
+      toHit: action.toHit,
       actionEffects: action.effects,
       conc: action.concentration,
       isSpell: action.type === "spell",
@@ -203,6 +206,7 @@
         results.push({
           name: action.name,
           authoredDmg: action.dmg,
+          toHit: action.toHit,
         });
       }
     }
@@ -308,6 +312,13 @@
       if (preset !== "heal") setDamageEffects(action.spellDmg.map((d) => ({ dice: "", type: d.type })));
     } else {
       diceHint = null;
+    }
+
+    // Prepend attack bonus to dice hint
+    const toHit = action.toHit ?? action.libAction?.toHit;
+    if (toHit != null) {
+      const bonus = toHit >= 0 ? `+${toHit} to hit` : `${toHit} to hit`;
+      diceHint = diceHint ? `${bonus}; ${diceHint}` : bonus;
     }
 
     // Concentration
@@ -972,6 +983,9 @@
         onmousedown={() => selectAction(action)}
       >
         <span class="dnd-via-name">{action.name}</span>
+        {#if action.toHit != null}
+          <span class="dnd-via-tohit">+{action.toHit}</span>
+        {/if}
         {#if action.authoredDmg && action.authoredDmg.length > 0}
           <span class="dnd-via-detail">
             {action.authoredDmg.map((d) => `${d.dice} ${d.type}`.trim()).join(" + ")}

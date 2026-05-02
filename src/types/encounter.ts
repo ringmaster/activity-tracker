@@ -67,6 +67,8 @@ export interface CombatAction {
   type: string;
   /** Custom verb for the log, e.g., "grapples", "shoves". */
   verb?: string;
+  /** Attack roll bonus, e.g., 5 for "+5 to hit". */
+  toHit?: number;
   dmg?: AuthoredDamage[];
   save?: SaveInfo;
   area?: string;

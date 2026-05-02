@@ -937,6 +937,13 @@
   max-height: 200px;
 }
 
+.dnd-via-tohit {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  padding: 0 2px;
+}
+
 .dnd-via-badge {
   font-size: 10px;
   padding: 1px 5px;
