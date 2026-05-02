@@ -334,7 +334,8 @@
             name: ae.name ?? via,
             note: ae.note ?? "",
             trigger: ae.trigger ?? "",
-          }];
+            _on: ae.on ?? "target",
+          } as any];
         } else if (ae.type === "condition" && !effects.some((e) => e.type === "condition" && (e as ConditionEffect).condition === ae.name)) {
           effects = [...effects, {
             type: "condition",
