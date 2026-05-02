@@ -198,6 +198,8 @@
   text-align: left;
   justify-content: unset;
   border: none;
+  white-space: normal;
+  word-wrap: break-word;
 }
 
 .dnd-spell-desc p {
