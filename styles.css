@@ -193,12 +193,42 @@
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
+.dnd-spell-desc {
+  cursor: pointer;
+  text-align: left;
+  justify-content: unset;
+  border: none;
+}
+
 .dnd-spell-desc p {
   margin: 2px 0;
   color: #7eb8da;
 }
 
 .dnd-spell-desc strong {
+  color: #a0d0f0;
+}
+
+.dnd-numeric {
+  color: #ffffff;
+}
+
+.dnd-spell-meta {
+  max-width: 768px;
+  width: 100%;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #7eb8da;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dnd-spell-meta-row {
+  padding: 1px 0;
+}
+
+.dnd-spell-meta-row strong {
   color: #a0d0f0;
 }
 }

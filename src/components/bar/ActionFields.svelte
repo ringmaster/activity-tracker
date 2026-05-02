@@ -78,13 +78,40 @@
   let diceHint = $state<string | null>(null);
   let spellDesc = $state<string | null>(null);
   let spellDescEl = $state<HTMLElement | null>(null);
+  let showSpellMeta = $state(false);
+
+  /** Wrap words containing digits in <span class="dnd-numeric">. */
+  function highlightNumbers(el: HTMLElement) {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const replacements: { node: Text; html: string }[] = [];
+    let node: Text | null;
+    while ((node = walker.nextNode() as Text | null)) {
+      if (/\d/.test(node.textContent ?? "")) {
+        const html = (node.textContent ?? "").replace(
+          /\b(\S*\d\S*)\b/g,
+          '<span class="dnd-numeric">$1</span>',
+        );
+        replacements.push({ node, html });
+      }
+    }
+    for (const { node, html } of replacements) {
+      const span = document.createElement("span");
+      span.innerHTML = html;
+      node.parentNode?.replaceChild(span, node);
+    }
+  }
 
   // Render spell description as markdown when it changes
   $effect(() => {
     if (spellDescEl && spellDesc) {
       spellDescEl.empty();
       MarkdownRenderer.renderMarkdown(spellDesc, spellDescEl, "", null as any);
+      // Post-process: highlight numbers
+      requestAnimationFrame(() => {
+        if (spellDescEl) highlightNumbers(spellDescEl);
+      });
     }
+    showSpellMeta = false;
   });
 
   // svelte-ignore state_referenced_locally
@@ -746,7 +773,32 @@
 {/if}
 
 {#if spellDesc}
-  <div class="dnd-spell-desc" bind:this={spellDescEl}></div>
+  <button
+    class="dnd-spell-desc"
+    bind:this={spellDescEl}
+    title="Tap to show spell details"
+    onclick={() => { showSpellMeta = !showSpellMeta; }}
+  ></button>
+  {#if showSpellMeta && selectedSrdSpell}
+    <div class="dnd-spell-meta">
+      <div class="dnd-spell-meta-row"><strong>Level:</strong> {selectedSrdSpell.level === 0 ? "Cantrip" : selectedSrdSpell.level}</div>
+      {#if selectedSrdSpell.range}
+        <div class="dnd-spell-meta-row"><strong>Range:</strong> {selectedSrdSpell.range}</div>
+      {/if}
+      {#if selectedSrdSpell.concentration}
+        <div class="dnd-spell-meta-row"><strong>Concentration:</strong> Yes</div>
+      {/if}
+      {#if selectedSrdSpell.damageType}
+        <div class="dnd-spell-meta-row"><strong>Damage:</strong> {selectedSrdSpell.dice ?? ""} {selectedSrdSpell.damageType}</div>
+      {/if}
+      {#if selectedSrdSpell.saveStat}
+        <div class="dnd-spell-meta-row"><strong>Save:</strong> {selectedSrdSpell.saveStat.toUpperCase()}</div>
+      {/if}
+      {#if selectedSrdSpell.saveOnSuccess}
+        <div class="dnd-spell-meta-row"><strong>On save:</strong> {selectedSrdSpell.saveOnSuccess}</div>
+      {/if}
+    </div>
+  {/if}
 {/if}
 
 {#if showViaSuggestions && combinedSuggestions.length > 0}
