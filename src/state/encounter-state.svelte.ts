@@ -67,13 +67,14 @@ export class EncounterState {
 
   /** The round number of the currently viewed turn (derived from log position). */
   viewingRound = $derived.by(() => {
+    const log = this.log ?? [];
     const logIdx = this.currentTurnLogIndex;
-    if (logIdx < 0) return this.round;
+    if (logIdx < 0 || logIdx >= log.length) return this.round || 1;
 
     // Scan backwards from the current turn to find the nearest start_round
     for (let i = logIdx; i >= 0; i--) {
-      const entry = this.log[i] as any;
-      if (entry.start_round) return entry.start_round.n;
+      const entry = log[i] as any;
+      if (entry?.start_round) return entry.start_round.n;
     }
     return 1;
   });
