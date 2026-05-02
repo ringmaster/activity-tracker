@@ -158,12 +158,14 @@ function learnAction(
   const lower = via.toLowerCase();
 
   // Already known as an action or spell (string or object)?
-  const knownAction = (actor.actions ?? []).some((a) =>
-    (typeof a === "string" ? a : a.name).toLowerCase() === lower,
-  );
-  const knownSpell = (actor.spells ?? []).some((s) =>
-    (typeof s === "string" ? s : s.name).toLowerCase() === lower,
-  );
+  const knownAction = (actor.actions ?? []).some((a) => {
+    const name = typeof a === "string" ? a : a?.name;
+    return name?.toLowerCase() === lower;
+  });
+  const knownSpell = (actor.spells ?? []).some((s) => {
+    const name = typeof s === "string" ? s : s?.name;
+    return name?.toLowerCase() === lower;
+  });
   if (knownAction || knownSpell) return;
 
   // Already in the library?
