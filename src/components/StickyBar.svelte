@@ -353,6 +353,22 @@
     // Remove the tag
     combatant.tags = combatant.tags.filter((t) => t.id !== tagId);
 
+    // If this tag has a castId, remove all paired tags with the same castId
+    if (tag.castId) {
+      for (const c of encounter.combatants ?? []) {
+        if (c.id === combatantId) continue; // already handled above
+        const removed = (c.tags ?? []).filter((t) => t.castId === tag.castId);
+        if (removed.length > 0) {
+          c.tags = (c.tags ?? []).filter((t) => t.castId !== tag.castId);
+          for (const r of removed) {
+            encounter.logInsert({
+              effect_ends: { what: r.name, on: c.id, reason: "dismissed" },
+            });
+          }
+        }
+      }
+    }
+
     // If this tag had a source, check if the source has a concentration tag for this spell
     // and drop it (dismissing the effect ends concentration)
     if (tag.source) {
