@@ -365,7 +365,7 @@ export function dropConcentration(state: EncounterState, casterId: string): void
             effect_ends: {
               what: name,
               on: c.id,
-              reason: "concentration_dropped",
+              reason: "source_concentration_lost",
             },
           });
         }
