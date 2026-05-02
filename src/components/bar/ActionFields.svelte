@@ -79,6 +79,7 @@
   let isSpell = $state(false);
   let selectedVerb = $state<string | undefined>(undefined);
   let diceHint = $state<string | null>(null);
+  let actionNote = $state<string | null>(null);
   let spellDesc = $state<string | null>(null);
   let spellDescEl = $state<HTMLElement | null>(null);
   let showSpellMeta = $state(false);
@@ -280,6 +281,7 @@
     isSpell = !!action.isSpell;
     selectedLibAction = action.libAction ?? null;
     selectedVerb = action.verb;
+    actionNote = action.note ?? action.libAction?.note ?? null;
 
     // Show desc if available (from library action)
     if (action.libAction?.desc) {
@@ -467,6 +469,7 @@
     spellDesc = null;
     isSpell = false;
     diceHint = null;
+    actionNote = null;
   }
 
   function handleViaFocus() {
@@ -899,6 +902,8 @@
 
 {#if diceHint}
   <div class="dnd-dice-hint">Roll: {diceHint}</div>
+{:else if actionNote}
+  <div class="dnd-dice-hint">{actionNote}</div>
 {/if}
 
 {#if spellDesc}
