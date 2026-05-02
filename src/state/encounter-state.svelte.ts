@@ -34,27 +34,27 @@ export class EncounterState {
 
   // Derived values
   sortedCombatants = $derived(
-    [...this.combatants].sort((a, b) => (b.init ?? 0) - (a.init ?? 0)),
+    [...(this.combatants ?? [])].sort((a, b) => (b.init ?? 0) - (a.init ?? 0)),
   );
 
   currentActor = $derived(
-    this.combatants.find((c) => c.id === this.currentTurn) ?? null,
+    (this.combatants ?? []).find((c) => c.id === this.currentTurn) ?? null,
   );
 
   effectiveActor = $derived(
     this.swappedActor
-      ? this.combatants.find((c) => c.id === this.swappedActor) ?? this.currentActor
+      ? (this.combatants ?? []).find((c) => c.id === this.swappedActor) ?? this.currentActor
       : this.currentActor,
   );
 
   livingCombatants = $derived(
-    this.sortedCombatants.filter((c) =>
-      !c.conditions.includes("dead") && !c.conditions.includes("fled"),
+    (this.sortedCombatants ?? []).filter((c) =>
+      !(c.conditions ?? []).includes("dead") && !(c.conditions ?? []).includes("fled"),
     ),
   );
 
   livingNPCs = $derived(
-    this.livingCombatants.filter((c) => c.type === "npc"),
+    (this.livingCombatants ?? []).filter((c) => c.type === "npc"),
   );
 
   allNPCsDead = $derived(

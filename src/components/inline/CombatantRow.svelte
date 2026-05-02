@@ -49,10 +49,10 @@
     {:else if isFled}
       <span class="dnd-combatant-tag fled">FLED</span>
     {/if}
-    {#each combatant.conditions.filter(c => c !== "dead" && c !== "fled") as cond}
+    {#each (combatant.conditions ?? []).filter(c => c !== "dead" && c !== "fled") as cond}
       <span class="dnd-condition-chip">{cond}</span>
     {/each}
-    {#each combatant.tags as tag (tag.id)}
+    {#each (combatant.tags ?? []) as tag (tag.id)}
       <span class="dnd-tag-chip" title={tag.note ?? ""}>{tag.name}</span>
     {/each}
   </span>
