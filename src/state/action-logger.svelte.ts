@@ -289,40 +289,76 @@ function triggerConcentrationSave(
   damage: number,
 ): void {
   const combatant = state.getCombatant(targetId);
-  if (!combatant?.concentration) return;
+  if (!combatant) return;
+
+  // Find the concentration tag
+  const concTag = (combatant.tags ?? []).find((t) => t.name.startsWith("Concentrating:"));
+  if (!concTag) return;
 
   const dc = concentrationDC(damage);
-  const spell = combatant.concentration.spell;
+  const spellName = concTag.name.replace("Concentrating: ", "");
 
-  // Add a concentration save obligation that surfaces immediately
-  const obId = `conc-${targetId}-${state.log.length}`;
-  state.activeObligations.push({
-    id: obId,
-    spell,
-    cast_line: combatant.concentration.line_ref,
-    tgt: [targetId],
-    last_triggered: null,
+  // Add a concentration save tag that surfaces as a banner immediately
+  combatant.tags.push({
+    id: `conc-save-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    name: `Concentration: ${spellName}`,
+    source: targetId,
+    note: `CON DC ${dc} to maintain ${spellName}`,
+    trigger: "when_damaged",
+    onTrigger: `CON save DC ${dc} for ${spellName}`,
+    autoRemove: "manual",
+    save: { stat: "con", onSave: "maintain" },
   });
 }
 
 export function dropConcentration(state: EncounterState, casterId: string): void {
   const combatant = state.getCombatant(casterId);
-  if (!combatant?.concentration) return;
+  if (!combatant) return;
 
-  const spellKey = combatant.concentration.spell;
+  // Find the concentration tag
+  const concTag = (combatant.tags ?? []).find((t) => t.name.startsWith("Concentrating:"));
+  const spellName = concTag?.name.replace("Concentrating: ", "") ?? combatant.concentration?.spell;
+
+  // Remove concentration tag from the caster
+  if (concTag) {
+    combatant.tags = combatant.tags.filter((t) => t.id !== concTag.id);
+  }
+
+  // Also remove any pending concentration save tags
+  combatant.tags = combatant.tags.filter((t) => !t.name.startsWith("Concentration:"));
+
+  // Clear the legacy concentration field
   combatant.concentration = null;
 
-  state.logInsert({
-    effect_ends: {
-      what: spellKey,
-      on: casterId,
-      reason: "concentration_dropped",
-    },
-  });
+  if (spellName) {
+    state.logInsert({
+      effect_ends: {
+        what: spellName,
+        on: casterId,
+        reason: "concentration_dropped",
+      },
+    });
 
-  // Remove obligations tied to this spell by this caster
-  state.activeObligations = state.activeObligations.filter(
-    (ob) => !(ob.spell === spellKey && ob.cast_line >= 0),
+    // Cascade: remove all tags sourced from this caster for this spell on ALL combatants
+    for (const c of state.combatants ?? []) {
+      if (c.id === casterId) continue;
+      const before = c.tags?.length ?? 0;
+      c.tags = (c.tags ?? []).filter((t) => !(t.source === casterId && t.name === spellName));
+      if ((c.tags?.length ?? 0) < before) {
+        state.logInsert({
+          effect_ends: {
+            what: spellName,
+            on: c.id,
+            reason: "concentration_dropped",
+          },
+        });
+      }
+    }
+  }
+
+  // Clean up old obligations
+  state.activeObligations = (state.activeObligations ?? []).filter(
+    (ob) => !(ob.spell === spellName),
   );
 }
 

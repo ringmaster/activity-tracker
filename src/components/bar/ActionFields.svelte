@@ -2,7 +2,7 @@
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction } from "../../types/encounter";
   import { renderSpellDescription } from "../../utils/spell-renderer";
-  import { commitAttack, commitHeal } from "../../state/action-logger.svelte";
+  import { commitAttack, commitHeal, dropConcentration } from "../../state/action-logger.svelte";
   import { generateSpellTag, generateConcentrationTag } from "../../data/spell-tag-generator";
   import { findLibraryAction, searchLibrary } from "../../state/library-loader";
   import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
@@ -605,6 +605,11 @@
           }
           if (condition === "dead" && combatant.type === "npc" && combatant.hp) {
             combatant.hp.current = 0;
+          }
+          // Auto-drop concentration on death or incapacitation
+          if ((condition === "dead" || condition === "incapacitated") &&
+              (combatant.tags ?? []).some((t) => t.name.startsWith("Concentrating:"))) {
+            dropConcentration(encounter, combatant.id);
           }
         }
       }

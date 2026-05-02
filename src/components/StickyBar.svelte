@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { EncounterState } from "../state/encounter-state.svelte";
   import type { CombatTag } from "../types/encounter";
-  import { commitAttack, commitHeal } from "../state/action-logger.svelte";
+  import { commitAttack, commitHeal, dropConcentration } from "../state/action-logger.svelte";
   import { findLibraryAction } from "../state/library-loader";
   import { renderSpellDescription } from "../utils/spell-renderer";
   import { CONDITION_DESCRIPTIONS } from "../utils/condition-descriptions";
@@ -105,7 +105,10 @@
           }
         }
 
-        // when_damaged: concentration saves, not surfaced as turn banners
+        // when_damaged: concentration save banners surface immediately (any turn)
+        if (tag.trigger === "when_damaged" && tag.name.startsWith("Concentration:")) {
+          banners.push({ tag, combatantId: combatant.id, combatantName: combatant.name });
+        }
       }
     }
 
@@ -150,6 +153,43 @@
 
   let confirmDeleteIdx = $state<number | null>(null);
   let expandedCondition = $state<string | null>(null);
+
+  function passConcentration(banner: TagBanner) {
+    // Remove the concentration save tag; concentration maintained
+    const combatant = encounter.getCombatant(banner.combatantId);
+    if (combatant) {
+      combatant.tags = combatant.tags.filter((t) => t.id !== banner.tag.id);
+      encounter.logInsert({
+        save: {
+          who: banner.combatantId,
+          stat: "con",
+          dc: parseInt(banner.tag.note?.match(/DC (\d+)/)?.[1] ?? "10", 10),
+          result: "pass",
+          for: banner.tag.name.replace("Concentration: ", ""),
+        },
+      });
+      encounter.flush();
+    }
+  }
+
+  function failConcentration(banner: TagBanner) {
+    // Remove the save tag and drop concentration
+    const combatant = encounter.getCombatant(banner.combatantId);
+    if (combatant) {
+      combatant.tags = combatant.tags.filter((t) => t.id !== banner.tag.id);
+      encounter.logInsert({
+        save: {
+          who: banner.combatantId,
+          stat: "con",
+          dc: parseInt(banner.tag.note?.match(/DC (\d+)/)?.[1] ?? "10", 10),
+          result: "fail",
+          for: banner.tag.name.replace("Concentration: ", ""),
+        },
+      });
+      dropConcentration(encounter, banner.combatantId);
+      encounter.flush();
+    }
+  }
 
   // Resolve flow state for deferred damage/heal banners
   let resolvingTagId = $state<string | null>(null);
@@ -428,7 +468,8 @@
     {#each activeBanners as banner (banner.tag.id)}
       {@const srdSpellName = getSpellNameFromTag(banner.tag)}
       {@const isDescExpanded = expandedSpellDescs.has(banner.tag.id)}
-      <div class="dnd-obligation-banner" class:concentration={banner.tag.name.startsWith("Concentrating:")}>
+      {@const isConcentrationSave = banner.tag.name.startsWith("Concentration:")}
+      <div class="dnd-obligation-banner" class:concentration={isConcentrationSave}>
         <div class="dnd-banner-title">
           &#9888; {banner.combatantName}: {banner.tag.name}
         </div>
@@ -439,6 +480,10 @@
           <div class="dnd-banner-detail">{banner.tag.note}</div>
         {/if}
         <div class="dnd-banner-actions">
+          {#if isConcentrationSave}
+            <button class="dnd-banner-btn pass" onclick={() => passConcentration(banner)}>Pass</button>
+            <button class="dnd-banner-btn fail" onclick={() => failConcentration(banner)}>Fail</button>
+          {/if}
           {#if banner.tag.damageType || banner.tag.isHeal}
             <button
               class="dnd-banner-btn dnd-resolve-btn"
