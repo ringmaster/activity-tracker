@@ -784,11 +784,32 @@
   {#if showSpellMeta && selectedSrdSpell}
     <div class="dnd-spell-meta">
       <div class="dnd-spell-meta-row"><strong>Level:</strong> {selectedSrdSpell.level === 0 ? "Cantrip" : selectedSrdSpell.level}</div>
+      {#if selectedSrdSpell.school}
+        <div class="dnd-spell-meta-row"><strong>School:</strong> {selectedSrdSpell.school}</div>
+      {/if}
+      {#if selectedSrdSpell.casting_time}
+        <div class="dnd-spell-meta-row"><strong>Casting time:</strong> {selectedSrdSpell.casting_time}</div>
+      {/if}
       {#if selectedSrdSpell.range}
         <div class="dnd-spell-meta-row"><strong>Range:</strong> {selectedSrdSpell.range}</div>
       {/if}
+      {#if selectedSrdSpell.areaOfEffect}
+        <div class="dnd-spell-meta-row"><strong>Area:</strong> {selectedSrdSpell.areaOfEffect}</div>
+      {/if}
+      {#if selectedSrdSpell.duration}
+        <div class="dnd-spell-meta-row"><strong>Duration:</strong> {selectedSrdSpell.duration}</div>
+      {/if}
       {#if selectedSrdSpell.concentration}
         <div class="dnd-spell-meta-row"><strong>Concentration:</strong> Yes</div>
+      {/if}
+      {#if selectedSrdSpell.components}
+        <div class="dnd-spell-meta-row"><strong>Components:</strong> {selectedSrdSpell.components}</div>
+      {/if}
+      {#if selectedSrdSpell.material}
+        <div class="dnd-spell-meta-row"><strong>Material:</strong> {selectedSrdSpell.material}</div>
+      {/if}
+      {#if selectedSrdSpell.ritual}
+        <div class="dnd-spell-meta-row"><strong>Ritual:</strong> Yes</div>
       {/if}
       {#if selectedSrdSpell.damageType}
         <div class="dnd-spell-meta-row"><strong>Damage:</strong> {selectedSrdSpell.dice ?? ""} {selectedSrdSpell.damageType}</div>
@@ -798,6 +819,12 @@
       {/if}
       {#if selectedSrdSpell.saveOnSuccess}
         <div class="dnd-spell-meta-row"><strong>On save:</strong> {selectedSrdSpell.saveOnSuccess}</div>
+      {/if}
+      {#if selectedSrdSpell.classes}
+        <div class="dnd-spell-meta-row"><strong>Classes:</strong> {selectedSrdSpell.classes}</div>
+      {/if}
+      {#if selectedSrdSpell.higher_level}
+        <div class="dnd-spell-meta-row"><strong>At higher levels:</strong> {selectedSrdSpell.higher_level}</div>
       {/if}
     </div>
   {/if}

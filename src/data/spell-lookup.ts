@@ -3,13 +3,22 @@ import srdSpells from "./srd-spells.json";
 export interface SrdSpell {
   name: string;
   level: number;
+  school?: string;
+  casting_time?: string;
+  duration?: string;
+  components?: string;
+  material?: string;
+  ritual?: boolean;
   desc: string;
+  higher_level?: string;
   concentration?: boolean;
   range?: string;
   damageType?: string;
   dice?: string;
   saveStat?: string;
   saveOnSuccess?: string;
+  areaOfEffect?: string;
+  classes?: string;
 }
 
 const spells: SrdSpell[] = srdSpells as SrdSpell[];
