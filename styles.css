@@ -1096,6 +1096,25 @@
 .dnd-dmg-icon[data-type="slashing"] svg { fill: #d0d0d0; }
 .dnd-dmg-icon[data-type="thunder"] svg { fill: #90a8d0; }
 
+.dnd-auto-tags-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 10px;
+  min-height: 36px !important;
+  min-width: 0 !important;
+  border: 1px solid #2a4a5e;
+  border-radius: 6px;
+  background: #2a4a5e;
+  color: #7eb8da;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dnd-auto-tags-pill.active {
+  background: #1a3a4e;
+}
+
 .dnd-tag-widget {
   border-color: #2a4a5e;
 }

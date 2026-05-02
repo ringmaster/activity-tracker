@@ -8,6 +8,8 @@ actions:
       - type: tag
         name: grappled
         on: target
+        trigger: start_of_turn
+        note: "Speed 0. Escape: Athletics/Acrobatics vs grappler's Athletics."
       - type: tag
         name: grappling
         on: self

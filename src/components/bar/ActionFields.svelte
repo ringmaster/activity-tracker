@@ -65,6 +65,9 @@
   let showTargets = $state(preset === "attack" && encounter.lastTargetIds.length === 0);
   let showViaSuggestions = $state(false);
   let showEffectPicker = $state(false);
+  let showAutoTags = $state(false);
+  /** Track which tag indices are auto-populated from the library definition. */
+  let autoTagIndices = $state<Set<number>>(new Set());
 
   function closeAllDropdowns() {
     showTargets = false;
@@ -109,6 +112,10 @@
     return initial;
   }
   let targets = $state<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>(buildInitialTargets());
+
+  let autoTagCount = $derived(
+    effects.filter((_, idx) => autoTagIndices.has(idx) && effects[idx]?.type === "tag").length,
+  );
 
   let cancelIcon = $derived(
     preset === "attack" ? "\u2694" : preset === "cast" ? "\u2728" : "\u2764",
@@ -329,13 +336,16 @@
     if (action.actionEffects && action.actionEffects.length > 0) {
       for (const ae of action.actionEffects) {
         if (ae.type === "tag" && !effects.some((e) => e.type === "tag" && (e as TagEffect).name === ae.name)) {
+          const newIdx = effects.length;
           effects = [...effects, {
             type: "tag",
             name: ae.name ?? via,
             note: ae.note ?? "",
             trigger: ae.trigger ?? "",
             _on: ae.on ?? "target",
+            _auto: true,
           } as any];
+          autoTagIndices = new Set([...autoTagIndices, newIdx]);
         } else if (ae.type === "condition" && !effects.some((e) => e.type === "condition" && (e as ConditionEffect).condition === ae.name)) {
           effects = [...effects, {
             type: "condition",
@@ -355,7 +365,9 @@
             _dice: ae.dice,
             _save: ae.save,
             _on: ae.on ?? "target",
+            _auto: true,
           } as any];
+          autoTagIndices = new Set([...autoTagIndices, effects.length - 1]);
         } else if (ae.type === "damage" && !ae.trigger) {
           // Immediate damage: add damage widget
           if (ae.damageType) {
@@ -370,7 +382,9 @@
             _isHeal: true,
             _dice: ae.dice,
             _on: ae.on ?? "ally",
+            _auto: true,
           } as any];
+          autoTagIndices = new Set([...autoTagIndices, effects.length - 1]);
         } else if (ae.type === "heal" && !ae.trigger) {
           // Immediate heal: add heal widget
           effects = [...effects, { type: "heal", amount: 0 }];
@@ -685,9 +699,13 @@
           }
         }
       }
-      // Log once per tag effect, not once per target
-      for (const tagEffect of tagEffects) {
+      // Log once per tag effect, but skip auto-populated tags from library
+      for (let i = 0; i < tagEffects.length; i++) {
+        const tagEffect = tagEffects[i];
         if (!tagEffect.name) continue;
+        // Find this tag's index in the full effects array
+        const effectIdx = effects.indexOf(tagEffect as any);
+        if (effectIdx >= 0 && autoTagIndices.has(effectIdx)) continue; // auto tag, don't log
         encounter.logInsert({
           tag: {
             by: actor.id,
@@ -780,6 +798,8 @@
           <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
         {/if}
       </div>
+    {:else if effect.type === "tag" && autoTagIndices.has(idx) && !showAutoTags}
+      <!-- Auto tags hidden; shown via pill -->
     {:else if effect.type === "tag"}
       <div class="dnd-effect-widget dnd-tag-widget">
         <span class="dnd-effect-label">&#127991;</span>
@@ -824,6 +844,21 @@
       </div>
     {/if}
   {/each}
+
+  <!-- Auto-tags pill -->
+  {#if autoTagCount > 0 && !showAutoTags}
+    <button
+      class="dnd-auto-tags-pill"
+      onclick={() => { showAutoTags = true; }}
+      title="Show auto-applied tags"
+    >{autoTagCount} tag{autoTagCount > 1 ? "s" : ""} &#9656;</button>
+  {:else if autoTagCount > 0 && showAutoTags}
+    <button
+      class="dnd-auto-tags-pill active"
+      onclick={() => { showAutoTags = false; }}
+      title="Collapse auto-applied tags"
+    >{autoTagCount} tag{autoTagCount > 1 ? "s" : ""} &#9662;</button>
+  {/if}
 
   <!-- Add effect button -->
   <div style="position: relative;">
