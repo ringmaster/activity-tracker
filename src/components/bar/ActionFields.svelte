@@ -305,8 +305,9 @@
     if (action.conc || action.libAction?.concentration) isConc = true;
     if (action.isSpell && action.spellKey) spellKey = action.spellKey;
 
-    // Auto-generate a tag effect from description if available
-    if (action.libAction?.desc) {
+    // Auto-generate a tag effect from description, but only if the action
+    // doesn't have explicit effects (authored effects take priority)
+    if (action.libAction?.desc && !action.actionEffects?.length) {
       const autoTag = generateSpellTag(
         action.libAction,
         encounter.effectiveActor?.id ?? "",
