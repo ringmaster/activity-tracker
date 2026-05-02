@@ -1,20 +1,28 @@
 import type { EncounterState } from "../state/encounter-state.svelte";
 
+/** Check if all targets in a list are the actor themselves. */
+function isSelfOnly(actorId: string, targets: string[]): boolean {
+  return targets.length > 0 && targets.every((t) => t === actorId);
+}
+
 /** Produce a human-readable summary of a log entry. Returns null for structural entries. */
 export function summarizeLogEntry(entry: any, encounter: EncounterState): string | null {
   if (entry.attack) {
-    const actorName = encounter.getCombatant(entry.attack.by)?.name ?? entry.attack.by;
+    const actorId = entry.attack.by;
+    const actorName = encounter.getCombatant(actorId)?.name ?? actorId;
     const isSpell = !!entry.attack.spell;
     const isFailed = !!entry.attack.failed;
     const customVerb = entry.attack.verb;
+    const tgtIds = (entry.attack.tgt ?? []).map((t: any) => t.who);
+    const selfOnly = isSelfOnly(actorId, tgtIds);
     const allNoDamage = (entry.attack.tgt ?? []).every((t: any) => !t.dmg || t.dmg.length === 0);
-
-    const targetNames = (entry.attack.tgt ?? [])
-      .map((t: any) => encounter.getCombatant(t.who)?.name ?? t.who)
-      .join(", ");
 
     // Failed actions
     if (isFailed) {
+      if (selfOnly) {
+        return `${actorName} failed to use ${entry.attack.via}.`;
+      }
+      const targetNames = tgtIds.map((id: string) => encounter.getCombatant(id)?.name ?? id).join(", ");
       if (customVerb) {
         return `${actorName} fails to ${customVerb.replace(/s$/, "")} ${targetNames}.`;
       }
@@ -35,7 +43,13 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
       })
       .join(", ");
 
-    // Custom verb: "Bandit 1 grapples Wex."
+    // Self-targeted: drop "on [self]"
+    if (selfOnly) {
+      if (customVerb) return `${actorName} ${customVerb}.`;
+      if (isSpell) return `${actorName} cast ${entry.attack.via}.`;
+      return `${actorName} used ${entry.attack.via}.`;
+    }
+
     if (customVerb) {
       return `${actorName} ${customVerb} ${targetParts}.`;
     }
@@ -48,7 +62,13 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     return `${actorName} attacked ${targetParts} with ${entry.attack.via}.`;
   }
   if (entry.heal) {
-    const actorName = encounter.getCombatant(entry.heal.by)?.name ?? entry.heal.by;
+    const actorId = entry.heal.by;
+    const actorName = encounter.getCombatant(actorId)?.name ?? actorId;
+    const tgtIds = entry.heal.tgt.map((t: any) => t.who);
+    if (isSelfOnly(actorId, tgtIds)) {
+      const hp = entry.heal.tgt[0]?.hp ?? 0;
+      return `${actorName} healed self for ${hp}.`;
+    }
     const targets = entry.heal.tgt.map((t: any) => {
       const name = encounter.getCombatant(t.who)?.name ?? t.who;
       return `${name} for ${t.hp}`;
@@ -63,8 +83,13 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     return `${targets} ${entry.condition.tgt.length === 1 ? "is" : "are"} ${conds}.`;
   }
   if (entry.tag) {
-    const actorName = encounter.getCombatant(entry.tag.by)?.name ?? entry.tag.by;
-    const targets = entry.tag.tgt
+    const actorId = entry.tag.by;
+    const actorName = encounter.getCombatant(actorId)?.name ?? actorId;
+    const tgtIds = entry.tag.tgt ?? [];
+    if (isSelfOnly(actorId, tgtIds)) {
+      return `${actorName} applies ${entry.tag.name}${entry.tag.note ? ` (${entry.tag.note})` : ""}.`;
+    }
+    const targets = tgtIds
       .map((id: string) => encounter.getCombatant(id)?.name ?? id)
       .join(", ");
     return `${actorName} tags ${targets} with ${entry.tag.name}${entry.tag.note ? ` (${entry.tag.note})` : ""}.`;
