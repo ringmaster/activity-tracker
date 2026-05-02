@@ -153,6 +153,7 @@
     actionEffects?: ActionEffect[];
     libAction?: CombatAction;
     note?: string;
+    source?: string;
   }
 
   /** Resolve a string action reference from the library. */
@@ -167,6 +168,8 @@
         conc: libAction.concentration,
         isSpell: libAction.type === "spell",
         note: libAction.note,
+        source: libAction._source,
+        libAction,
       };
     }
     return null;
@@ -182,6 +185,8 @@
       conc: action.concentration,
       isSpell: action.type === "spell",
       note: action.note,
+      source: action._source,
+      libAction: action,
     };
   }
 
@@ -851,6 +856,9 @@
           <span class="dnd-via-badge">spell</span>
         {:else if action.verb}
           <span class="dnd-via-badge">{action.verb}</span>
+        {/if}
+        {#if action.source}
+          <span class="dnd-via-source">{action.source}</span>
         {/if}
       </button>
     {/each}

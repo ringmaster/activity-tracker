@@ -29,8 +29,18 @@ export async function loadLibrary(
     const file = app.vault.getAbstractFileByPath(path);
     if (!file || !("extension" in file)) continue;
 
+    // Derive a short label from the filename (e.g., "srd-library.yaml" -> "SRD Library")
+    const sourceLabel = path
+      .replace(/^.*\//, "")        // strip directory
+      .replace(/\.\w+$/, "")       // strip extension
+      .replace(/[-_]/g, " ")       // dashes/underscores to spaces
+      .replace(/\b\w/g, (c) => c.toUpperCase()); // title case
+
     const content = await app.vault.read(file as TFile);
     const parsed = parseLibraryContent(content);
+    for (const action of parsed) {
+      action._source = sourceLabel;
+    }
     allActions.push(...parsed);
   }
 

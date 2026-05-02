@@ -89,6 +89,9 @@ export interface CombatAction {
   saveOnSuccess?: string;
   areaOfEffect?: string;
   classes?: string;
+
+  /** Runtime-only: which library file this action was loaded from. */
+  _source?: string;
 }
 
 export type TagTrigger = "start_of_turn" | "end_of_turn" | "when_damaged";
