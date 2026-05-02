@@ -204,8 +204,9 @@
 
   function commitResolve(banner: TagBanner) {
     const tag = banner.tag;
-    const targetId = banner.combatantId;
-    const sourceId = tag.source ?? targetId;
+    const sourceId = tag.source ?? banner.combatantId;
+    // resolveTarget overrides the banner's combatantId for damage/heal application
+    const targetId = tag.resolveTarget ?? banner.combatantId;
 
     if (tag.isHeal && resolveAmount > 0) {
       commitHeal(encounter, {
@@ -471,7 +472,7 @@
       {@const isConcentrationSave = banner.tag.name.startsWith("Concentration:")}
       <div class="dnd-obligation-banner" class:concentration={isConcentrationSave}>
         <div class="dnd-banner-title">
-          &#9888; {banner.combatantName}: {banner.tag.name}
+          &#9888; {banner.combatantName}: {banner.tag.name}{#if banner.tag.resolveTarget} &rarr; {encounter.getCombatant(banner.tag.resolveTarget)?.name ?? banner.tag.resolveTarget}{/if}
         </div>
         {#if banner.tag.onTrigger}
           <div class="dnd-banner-detail">{banner.tag.onTrigger}</div>

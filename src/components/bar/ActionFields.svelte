@@ -634,6 +634,14 @@
         for (const tagEffect of tagEffects) {
           if (!tagEffect.name) continue;
           const tagAny = tagEffect as any;
+          const hasDeferredEffect = !!(tagAny._damageType || tagAny._isHeal);
+          // For deferred effects on self: the tag goes on the caster but
+          // resolves against the selected target
+          const resolveTargetId = hasDeferredEffect && targetId === actor.id
+            ? affectedTargetIds.find((id) => id !== actor.id) ?? undefined
+            : hasDeferredEffect && targetId !== actor.id
+              ? targetId
+              : undefined;
           combatant.tags.push({
             id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             name: tagEffect.name,
@@ -642,11 +650,11 @@
             trigger: tagEffect.trigger || undefined,
             onTrigger: tagEffect.note || undefined,
             autoRemove: "manual",
-            // Carry deferred damage/heal info if present
             damageType: tagAny._damageType || undefined,
             dice: tagAny._dice || undefined,
             save: tagAny._save || undefined,
             isHeal: tagAny._isHeal || undefined,
+            resolveTarget: resolveTargetId,
           });
         }
       }

@@ -118,6 +118,8 @@ export interface CombatTag {
   save?: { stat: string; onSave?: string };
   /** Deferred heal flag. */
   isHeal?: boolean;
+  /** Who the deferred effect resolves against (target combatant ID). */
+  resolveTarget?: string;
 }
 
 export interface Combatant {
