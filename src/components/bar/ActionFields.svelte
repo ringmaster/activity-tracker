@@ -267,18 +267,39 @@
     selectedLibAction = action.libAction ?? null;
     selectedVerb = action.verb;
 
-    // --- SRD spell handling ---
-    if (action.libAction) {
+    // Show desc if available (from library action)
+    if (action.libAction?.desc) {
       spellDesc = action.libAction.desc;
-      if (action.libAction.damageType && preset !== "heal") {
-        setDamageEffects([{ dice: "", type: action.libAction.damageType }]);
-      }
-      if (action.libAction.concentration) isConc = true;
-      diceHint = action.libAction.dice && action.libAction.damageType
+    } else {
+      spellDesc = null;
+    }
+    selectedLibAction = action.libAction ?? null;
+
+    // Dice hint and damage effect population
+    if (action.authoredDmg && action.authoredDmg.length > 0) {
+      const parts = action.authoredDmg
+        .filter((d) => d.dice)
+        .map((d) => `${d.dice} ${d.type}`);
+      diceHint = parts.length > 0 ? parts.join(" + ") : null;
+      if (preset !== "heal") setDamageEffects(action.authoredDmg);
+    } else if (action.libAction?.damageType) {
+      diceHint = action.libAction.dice
         ? `${action.libAction.dice} ${action.libAction.damageType}`
         : null;
+      if (preset !== "heal") setDamageEffects([{ dice: "", type: action.libAction.damageType }]);
+    } else if (action.spellDmg && action.spellDmg.length > 0) {
+      diceHint = null;
+      if (preset !== "heal") setDamageEffects(action.spellDmg.map((d) => ({ dice: "", type: d.type })));
+    } else {
+      diceHint = null;
+    }
 
-      // Auto-generate a tag effect from SRD description
+    // Concentration
+    if (action.conc || action.libAction?.concentration) isConc = true;
+    if (action.isSpell && action.spellKey) spellKey = action.spellKey;
+
+    // Auto-generate a tag effect from description if available
+    if (action.libAction?.desc) {
       const autoTag = generateSpellTag(
         action.libAction,
         encounter.effectiveActor?.id ?? "",
@@ -294,28 +315,6 @@
           }];
         }
       }
-    } else {
-      spellDesc = null;
-      selectedLibAction = null;
-
-      // Dice hint from authored damage
-      if (action.authoredDmg && action.authoredDmg.length > 0) {
-        const parts = action.authoredDmg
-          .filter((d) => d.dice)
-          .map((d) => `${d.dice} ${d.type}`);
-        diceHint = parts.length > 0 ? parts.join(" + ") : null;
-      } else {
-        diceHint = null;
-      }
-
-      // Set damage type effects from authored damage
-      const dmgSource = action.authoredDmg ?? action.spellDmg?.map((d) => ({ dice: "", type: d.type }));
-      if (dmgSource && dmgSource.length > 0 && preset !== "heal") {
-        setDamageEffects(dmgSource);
-      }
-
-      if (action.isSpell && action.spellKey) spellKey = action.spellKey;
-      if (action.conc) isConc = true;
     }
 
     // --- Auto-populate structured effects from action definition ---
