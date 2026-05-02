@@ -13,19 +13,20 @@ import InlineView from "./components/InlineView.svelte";
 import StickyBar from "./components/StickyBar.svelte";
 import { EncounterState } from "./state/encounter-state.svelte";
 import { parseEncounterYaml } from "./state/yaml-bridge";
-import { loadLibrary } from "./state/library-loader";
+import { loadLibrary, invalidateLibraryCache } from "./state/library-loader";
 import { expandCombatants } from "./utils/id-generator";
 
 interface ActivityTrackerSettings {
   partyNotePath: string;
-  libraryPath: string;
+  /** Comma-separated list of vault paths to YAML library files. */
+  libraryPaths: string;
   codeBlockLanguage: string;
   debugOverlay: boolean;
 }
 
 const DEFAULT_SETTINGS: ActivityTrackerSettings = {
   partyNotePath: "party.yaml",
-  libraryPath: "library.md",
+  libraryPaths: "library.yaml, srd-library.yaml",
   codeBlockLanguage: "dnd-combat",
   debugOverlay: false,
 };
@@ -88,7 +89,7 @@ export default class ActivityTrackerPlugin extends Plugin {
     this.debug.log(`onload: platform=${navigator.userAgent.includes("Mobile") ? "mobile" : "desktop"}`);
 
     // Load actions library
-    loadLibrary(this.app, this.settings.libraryPath);
+    loadLibrary(this.app, this.settings.libraryPaths);
 
     // Register the code block processor
     this.registerMarkdownCodeBlockProcessor(
@@ -257,7 +258,7 @@ export default class ActivityTrackerPlugin extends Plugin {
       );
       state.onDeactivate = () => this.hideBar();
       state.partyNotePath = this.settings.partyNotePath;
-      state.libraryPath = this.settings.libraryPath;
+      state.libraryPaths = this.settings.libraryPaths;
       this.encounterStates.set(key, state);
     }
 
@@ -485,15 +486,45 @@ class ActivityTrackerSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Actions library path")
-      .setDesc("Path to the vault note containing the actions/spells library (e.g., library.md)")
+      .setName("Library files")
+      .setDesc("Comma-separated paths to YAML library files (e.g., library.yaml, srd-library.yaml)")
       .addText((text) =>
         text
-          .setPlaceholder("library.md")
-          .setValue(this.plugin.settings.libraryPath)
+          .setPlaceholder("library.yaml, srd-library.yaml")
+          .setValue(this.plugin.settings.libraryPaths)
           .onChange(async (value) => {
-            this.plugin.settings.libraryPath = value;
+            this.plugin.settings.libraryPaths = value;
+            invalidateLibraryCache();
             await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Download SRD spell library")
+      .setDesc("Download the D&D 5e SRD spell list as srd-library.yaml in your vault root")
+      .addButton((btn) =>
+        btn
+          .setButtonText("Download")
+          .onClick(async () => {
+            btn.setButtonText("Downloading...");
+            btn.setDisabled(true);
+            try {
+              const url = "https://raw.githubusercontent.com/ringmaster/activity-tracker/main/samples/srd-library.yaml";
+              const response = await fetch(url);
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const content = await response.text();
+              const exists = this.plugin.app.vault.getAbstractFileByPath("srd-library.yaml");
+              if (exists) {
+                await this.plugin.app.vault.modify(exists as any, content);
+              } else {
+                await this.plugin.app.vault.create("srd-library.yaml", content);
+              }
+              btn.setButtonText("Downloaded!");
+              invalidateLibraryCache();
+              loadLibrary(this.plugin.app, this.plugin.settings.libraryPaths);
+            } catch (e: any) {
+              btn.setButtonText(`Error: ${e.message}`);
+            }
           }),
       );
 

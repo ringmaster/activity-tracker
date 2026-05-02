@@ -2,7 +2,7 @@ import type { EncounterState } from "./encounter-state.svelte";
 import type { DamageComponent, CombatAction } from "../types/encounter";
 import type { AttackTargetResult } from "../types/actions";
 import { applyOutcome, totalDamage, concentrationDC } from "../utils/damage-calc";
-import { findSpell } from "../data/spell-lookup";
+import { findLibraryAction } from "./library-loader";
 import { findLibraryAction, addToLibrary } from "./library-loader";
 import { updatePartyMember } from "./party-loader";
 import { nowTimestamp } from "../utils/time";
@@ -188,7 +188,7 @@ function learnAction(
   }
 
   // If it matches an SRD spell, store as a spell name string
-  const srd = findSpell(via);
+  const srd = findLibraryAction(via);
   if (srd) {
     if (!actor.spells) actor.spells = [];
     actor.spells.push(srd.name);
@@ -210,7 +210,7 @@ function learnAction(
     }
     if (concentration) libAction.concentration = true;
 
-    addToLibrary(state.app, state.libraryPath, libAction);
+    addToLibrary(state.app, state.libraryPaths, libAction);
 
     // Add string reference to the actor
     if (isSpellAction) {

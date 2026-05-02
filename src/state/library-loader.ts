@@ -7,81 +7,91 @@ export interface LibraryData {
 }
 
 let cachedLibrary: CombatAction[] = [];
-let cachedPath: string = "";
+let cachedPaths: string = "";
 
 /**
- * Load the actions library from the configured note.
- * Caches the result; call invalidateLibraryCache() to force reload.
+ * Load actions from all configured library files.
+ * Paths is a comma-separated string of vault file paths.
+ * Caches the merged result.
  */
 export async function loadLibrary(
   app: App,
-  libraryPath: string,
+  paths: string,
 ): Promise<CombatAction[]> {
-  if (cachedPath === libraryPath && cachedLibrary.length > 0) {
+  if (cachedPaths === paths && cachedLibrary.length > 0) {
     return cachedLibrary;
   }
 
-  const file = app.vault.getAbstractFileByPath(libraryPath);
-  if (!file || !("extension" in file)) return [];
+  const allActions: CombatAction[] = [];
+  const pathList = paths.split(",").map((p) => p.trim()).filter((p) => p.length > 0);
 
-  const content = await app.vault.read(file as TFile);
-  const parsed = parseLibraryContent(content);
-  cachedLibrary = parsed;
-  cachedPath = libraryPath;
-  return parsed;
+  for (const path of pathList) {
+    const file = app.vault.getAbstractFileByPath(path);
+    if (!file || !("extension" in file)) continue;
+
+    const content = await app.vault.read(file as TFile);
+    const parsed = parseLibraryContent(content);
+    allActions.push(...parsed);
+  }
+
+  cachedLibrary = allActions;
+  cachedPaths = paths;
+  return allActions;
 }
 
-/** Synchronous access to the cached library (returns empty if not yet loaded). */
+/** Synchronous access to the cached library. */
 export function getCachedLibrary(): CombatAction[] {
   return cachedLibrary;
 }
 
 export function invalidateLibraryCache(): void {
   cachedLibrary = [];
-  cachedPath = "";
+  cachedPaths = "";
 }
 
-/** Look up an action by name from the cached library. */
+/** Look up an action/spell by name from the cached library. */
 export function findLibraryAction(name: string): CombatAction | undefined {
   const lower = name.toLowerCase();
   return cachedLibrary.find((a) => a.name.toLowerCase() === lower);
 }
 
 /** Search the cached library by partial name match. */
-export function searchLibrary(query: string): CombatAction[] {
+export function searchLibrary(query: string, limit = 10): CombatAction[] {
   if (query.length < 2) return [];
   const lower = query.toLowerCase();
-  return cachedLibrary.filter((a) => a.name.toLowerCase().includes(lower)).slice(0, 10);
+  return cachedLibrary.filter((a) => a.name.toLowerCase().includes(lower)).slice(0, limit);
 }
 
 /**
- * Add an action to the library file. Reads, merges, writes back.
+ * Add an action to a library file. Reads, merges, writes back.
+ * Writes to the first path in the comma-separated list.
  */
 export async function addToLibrary(
   app: App,
-  libraryPath: string,
+  paths: string,
   action: CombatAction,
 ): Promise<void> {
+  // Use the first path as the write target
+  const pathList = paths.split(",").map((p) => p.trim()).filter((p) => p.length > 0);
+  const libraryPath = pathList[0];
+  if (!libraryPath) return;
+
   const file = app.vault.getAbstractFileByPath(libraryPath);
 
   let existing: CombatAction[] = [];
   let content = "";
-  let format: "bare" | "codeblock" = "codeblock";
+  let format: "bare" | "codeblock" = "bare";
 
   if (file && "extension" in file) {
     content = await app.vault.read(file as TFile);
     existing = parseLibraryContent(content);
 
-    // Check if already exists
     if (existing.some((a) => a.name.toLowerCase() === action.name.toLowerCase())) {
       return;
     }
 
-    // Detect format
     if (content.match(/```ya?ml/)) {
       format = "codeblock";
-    } else {
-      format = "bare";
     }
   }
 
@@ -93,8 +103,7 @@ export async function addToLibrary(
   });
 
   if (!file) {
-    // Create the file
-    await app.vault.create(libraryPath, "```yaml\n" + newYaml.trimEnd() + "\n```\n");
+    await app.vault.create(libraryPath, newYaml);
   } else if (format === "codeblock") {
     const blockMatch = content.match(/```ya?ml\s*\n([\s\S]*?)```/);
     if (blockMatch) {
@@ -106,9 +115,8 @@ export async function addToLibrary(
     await app.vault.modify(file as TFile, newYaml);
   }
 
-  // Update cache
-  cachedLibrary = existing;
-  cachedPath = libraryPath;
+  // Invalidate cache so next load picks up changes
+  invalidateLibraryCache();
 }
 
 function parseLibraryContent(content: string): CombatAction[] {

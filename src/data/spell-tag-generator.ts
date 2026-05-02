@@ -1,5 +1,5 @@
 import type { CombatTag, TagTrigger } from "../types/encounter";
-import type { SrdSpell } from "./spell-lookup";
+import type { CombatAction } from "../types/encounter";
 
 /**
  * Auto-generate a CombatTag from SRD spell data.
@@ -7,11 +7,11 @@ import type { SrdSpell } from "./spell-lookup";
  * from the spell's save/damage/effect data.
  */
 export function generateSpellTag(
-  spell: SrdSpell,
+  spell: CombatAction,
   casterId: string,
   targetIds: string[],
 ): CombatTag | null {
-  const trigger = inferTrigger(spell.desc);
+  const trigger = inferTrigger(spell.desc ?? "");
 
   // Only generate a target tag if there's an ongoing triggered effect.
   // Concentration alone doesn't warrant a target tag; that goes on the caster.
@@ -85,7 +85,7 @@ function inferTrigger(desc: string): TagTrigger | undefined {
 }
 
 /** Build a concise note from spell data. */
-function buildNote(spell: SrdSpell): string {
+function buildNote(spell: CombatAction): string {
   const parts: string[] = [];
 
   if (spell.concentration) {
@@ -119,7 +119,7 @@ function buildNote(spell: SrdSpell): string {
  * Build the tag note (used in log parenthetical and banner detail).
  * Format: "start of turn: WIS save; 2d6 fire"
  */
-function buildTagNote(spell: SrdSpell, trigger: TagTrigger): string {
+function buildTagNote(spell: CombatAction, trigger: TagTrigger): string {
   const timing = trigger === "start_of_turn"
     ? "start of turn"
     : trigger === "end_of_turn"
@@ -154,13 +154,13 @@ function buildTagNote(spell: SrdSpell, trigger: TagTrigger): string {
  * Build the banner text shown when a trigger fires.
  * Format: "Start of turn: WIS save; 2d6 fire"
  */
-function buildBannerReminder(spell: SrdSpell, trigger: TagTrigger): string {
+function buildBannerReminder(spell: CombatAction, trigger: TagTrigger): string {
   const note = buildTagNote(spell, trigger);
   return note.charAt(0).toUpperCase() + note.slice(1);
 }
 
 /** Infer how the tag should be removed. */
-function inferAutoRemove(spell: SrdSpell): "on_save" | "on_source_end" | "manual" {
+function inferAutoRemove(spell: CombatAction): "on_save" | "on_source_end" | "manual" {
   if (spell.concentration) return "on_source_end";
 
   if (spell.saveOnSuccess) {

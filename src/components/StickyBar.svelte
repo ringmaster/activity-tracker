@@ -2,7 +2,7 @@
   import { MarkdownRenderer } from "obsidian";
   import type { EncounterState } from "../state/encounter-state.svelte";
   import type { CombatTag } from "../types/encounter";
-  import { findSpell } from "../data/spell-lookup";
+  import { findLibraryAction } from "../state/library-loader";
   import { summarizeLogEntry } from "../utils/log-summary";
   import DefaultBar from "./bar/DefaultBar.svelte";
   import ActionBar from "./bar/ActionBar.svelte";
@@ -29,19 +29,19 @@
     if (name.startsWith("Concentrating: ")) {
       name = name.slice("Concentrating: ".length);
     }
-    const spell = findSpell(name);
+    const spell = findLibraryAction(name);
     return spell ? spell.name : null;
   }
 
   function renderSpellDesc(el: HTMLElement, spellName: string) {
-    const spell = findSpell(spellName);
-    if (!spell || !el) return;
+    const spell = findLibraryAction(spellName);
+    if (!spell?.desc || !el) return;
     el.innerHTML = "";
     MarkdownRenderer.renderMarkdown(spell.desc, el, "", null as any);
     return {
       update(newName: string) {
-        const s = findSpell(newName);
-        if (!s) return;
+        const s = findLibraryAction(newName);
+        if (!s?.desc) return;
         el.innerHTML = "";
         MarkdownRenderer.renderMarkdown(s.desc, el, "", null as any);
       },

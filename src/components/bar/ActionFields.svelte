@@ -3,9 +3,8 @@
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction } from "../../types/encounter";
   import { commitAttack, commitHeal } from "../../state/action-logger.svelte";
-  import { searchSpells, findSpell, type SrdSpell } from "../../data/spell-lookup";
   import { generateSpellTag, generateConcentrationTag } from "../../data/spell-tag-generator";
-  import { getCachedLibrary, findLibraryAction, searchLibrary } from "../../state/library-loader";
+  import { findLibraryAction, searchLibrary } from "../../state/library-loader";
   import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
   import DamageTypeIcon from "../shared/DamageTypeIcon.svelte";
 
@@ -140,7 +139,7 @@
     conc?: boolean;
     verb?: string;
     actionEffects?: ActionEffect[];
-    srdSpell?: SrdSpell;
+    libAction?: CombatAction;
     note?: string;
   }
 
@@ -206,22 +205,13 @@
     if (actor.spells) {
       for (const entry of actor.spells) {
         if (typeof entry === "string") {
-          // Try library first
+          // Resolve from library (includes SRD spells)
           const libResolved = resolveAction(entry);
           if (libResolved) {
             libResolved.isSpell = true;
             results.push(libResolved);
-            continue;
-          }
-          // Then SRD
-          const srd = findSpell(entry);
-          if (srd) {
-            results.push({
-              name: srd.name,
-              authoredDmg: srd.damageType ? [{ dice: srd.dice ?? "", type: srd.damageType }] : undefined,
-              isSpell: true, conc: srd.concentration, srdSpell: srd,
-            });
           } else {
+            // Unknown spell; show name without metadata
             results.push({ name: entry, isSpell: true });
           }
         } else {
@@ -246,25 +236,12 @@
     if (via.length < 2) return authoredMatches;
     const authoredNames = new Set(authoredMatches.map((a) => a.name.toLowerCase()));
 
-    // Library actions (available to everyone)
-    const libMatches = searchLibrary(via)
+    // Library search (includes SRD spells, homebrew, standard actions)
+    const libMatches = searchLibrary(via, 15)
       .filter((a) => !authoredNames.has(a.name.toLowerCase()))
       .map((a) => actionToSuggestion(a));
-    for (const m of libMatches) authoredNames.add(m.name.toLowerCase());
 
-    // SRD spells (after 3 chars)
-    let srdSuggestions: ActionSuggestion[] = [];
-    if (via.length >= 3) {
-      srdSuggestions = searchSpells(via)
-        .filter((s) => !authoredNames.has(s.name.toLowerCase()))
-        .map((s) => ({
-          name: s.name,
-          authoredDmg: s.damageType ? [{ dice: s.dice ?? "", type: s.damageType }] : undefined,
-          isSpell: true, conc: s.concentration, srdSpell: s,
-        }));
-    }
-
-    return [...authoredMatches, ...libMatches, ...srdSuggestions];
+    return [...authoredMatches, ...libMatches];
   });
 
   let targetLabel = $derived.by(() => {
@@ -284,28 +261,28 @@
 
   // --- Selection ---
 
-  let selectedSrdSpell = $state<SrdSpell | null>(null);
+  let selectedLibAction = $state<CombatAction | null>(null);
 
   function selectAction(action: ActionSuggestion) {
     via = action.name;
     isSpell = !!action.isSpell;
-    selectedSrdSpell = action.srdSpell ?? null;
+    selectedLibAction = action.libAction ?? null;
     selectedVerb = action.verb;
 
     // --- SRD spell handling ---
-    if (action.srdSpell) {
-      spellDesc = action.srdSpell.desc;
-      if (action.srdSpell.damageType && preset !== "heal") {
-        setDamageEffects([{ dice: "", type: action.srdSpell.damageType }]);
+    if (action.libAction) {
+      spellDesc = action.libAction.desc;
+      if (action.libAction.damageType && preset !== "heal") {
+        setDamageEffects([{ dice: "", type: action.libAction.damageType }]);
       }
-      if (action.srdSpell.concentration) isConc = true;
-      diceHint = action.srdSpell.dice && action.srdSpell.damageType
-        ? `${action.srdSpell.dice} ${action.srdSpell.damageType}`
+      if (action.libAction.concentration) isConc = true;
+      diceHint = action.libAction.dice && action.libAction.damageType
+        ? `${action.libAction.dice} ${action.libAction.damageType}`
         : null;
 
       // Auto-generate a tag effect from SRD description
       const autoTag = generateSpellTag(
-        action.srdSpell,
+        action.libAction,
         encounter.effectiveActor?.id ?? "",
         [],
       );
@@ -321,7 +298,7 @@
       }
     } else {
       spellDesc = null;
-      selectedSrdSpell = null;
+      selectedLibAction = null;
 
       // Dice hint from authored damage
       if (action.authoredDmg && action.authoredDmg.length > 0) {
@@ -781,50 +758,50 @@
     aria-label="Tap to show spell details"
     onclick={() => { showSpellMeta = !showSpellMeta; }}
   ></div>
-  {#if showSpellMeta && selectedSrdSpell}
+  {#if showSpellMeta && selectedLibAction}
     <div class="dnd-spell-meta">
-      <div class="dnd-spell-meta-row"><strong>Level:</strong> {selectedSrdSpell.level === 0 ? "Cantrip" : selectedSrdSpell.level}</div>
-      {#if selectedSrdSpell.school}
-        <div class="dnd-spell-meta-row"><strong>School:</strong> {selectedSrdSpell.school}</div>
+      <div class="dnd-spell-meta-row"><strong>Level:</strong> {selectedLibAction.level === 0 ? "Cantrip" : selectedLibAction.level}</div>
+      {#if selectedLibAction.school}
+        <div class="dnd-spell-meta-row"><strong>School:</strong> {selectedLibAction.school}</div>
       {/if}
-      {#if selectedSrdSpell.casting_time}
-        <div class="dnd-spell-meta-row"><strong>Casting time:</strong> {selectedSrdSpell.casting_time}</div>
+      {#if selectedLibAction.casting_time}
+        <div class="dnd-spell-meta-row"><strong>Casting time:</strong> {selectedLibAction.casting_time}</div>
       {/if}
-      {#if selectedSrdSpell.range}
-        <div class="dnd-spell-meta-row"><strong>Range:</strong> {selectedSrdSpell.range}</div>
+      {#if selectedLibAction.range}
+        <div class="dnd-spell-meta-row"><strong>Range:</strong> {selectedLibAction.range}</div>
       {/if}
-      {#if selectedSrdSpell.areaOfEffect}
-        <div class="dnd-spell-meta-row"><strong>Area:</strong> {selectedSrdSpell.areaOfEffect}</div>
+      {#if selectedLibAction.areaOfEffect}
+        <div class="dnd-spell-meta-row"><strong>Area:</strong> {selectedLibAction.areaOfEffect}</div>
       {/if}
-      {#if selectedSrdSpell.duration}
-        <div class="dnd-spell-meta-row"><strong>Duration:</strong> {selectedSrdSpell.duration}</div>
+      {#if selectedLibAction.duration}
+        <div class="dnd-spell-meta-row"><strong>Duration:</strong> {selectedLibAction.duration}</div>
       {/if}
-      {#if selectedSrdSpell.concentration}
+      {#if selectedLibAction.concentration}
         <div class="dnd-spell-meta-row"><strong>Concentration:</strong> Yes</div>
       {/if}
-      {#if selectedSrdSpell.components}
-        <div class="dnd-spell-meta-row"><strong>Components:</strong> {selectedSrdSpell.components}</div>
+      {#if selectedLibAction.components}
+        <div class="dnd-spell-meta-row"><strong>Components:</strong> {selectedLibAction.components}</div>
       {/if}
-      {#if selectedSrdSpell.material}
-        <div class="dnd-spell-meta-row"><strong>Material:</strong> {selectedSrdSpell.material}</div>
+      {#if selectedLibAction.material}
+        <div class="dnd-spell-meta-row"><strong>Material:</strong> {selectedLibAction.material}</div>
       {/if}
-      {#if selectedSrdSpell.ritual}
+      {#if selectedLibAction.ritual}
         <div class="dnd-spell-meta-row"><strong>Ritual:</strong> Yes</div>
       {/if}
-      {#if selectedSrdSpell.damageType}
-        <div class="dnd-spell-meta-row"><strong>Damage:</strong> {selectedSrdSpell.dice ?? ""} {selectedSrdSpell.damageType}</div>
+      {#if selectedLibAction.damageType}
+        <div class="dnd-spell-meta-row"><strong>Damage:</strong> {selectedLibAction.dice ?? ""} {selectedLibAction.damageType}</div>
       {/if}
-      {#if selectedSrdSpell.saveStat}
-        <div class="dnd-spell-meta-row"><strong>Save:</strong> {selectedSrdSpell.saveStat.toUpperCase()}</div>
+      {#if selectedLibAction.saveStat}
+        <div class="dnd-spell-meta-row"><strong>Save:</strong> {selectedLibAction.saveStat.toUpperCase()}</div>
       {/if}
-      {#if selectedSrdSpell.saveOnSuccess}
-        <div class="dnd-spell-meta-row"><strong>On save:</strong> {selectedSrdSpell.saveOnSuccess}</div>
+      {#if selectedLibAction.saveOnSuccess}
+        <div class="dnd-spell-meta-row"><strong>On save:</strong> {selectedLibAction.saveOnSuccess}</div>
       {/if}
-      {#if selectedSrdSpell.classes}
-        <div class="dnd-spell-meta-row"><strong>Classes:</strong> {selectedSrdSpell.classes}</div>
+      {#if selectedLibAction.classes}
+        <div class="dnd-spell-meta-row"><strong>Classes:</strong> {selectedLibAction.classes}</div>
       {/if}
-      {#if selectedSrdSpell.higher_level}
-        <div class="dnd-spell-meta-row"><strong>At higher levels:</strong> {selectedSrdSpell.higher_level}</div>
+      {#if selectedLibAction.higher_level}
+        <div class="dnd-spell-meta-row"><strong>At higher levels:</strong> {selectedLibAction.higher_level}</div>
       {/if}
     </div>
   {/if}

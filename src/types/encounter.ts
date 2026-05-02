@@ -71,6 +71,24 @@ export interface CombatAction {
   note?: string;
   slot?: number;
   concentration?: boolean;
+
+  // --- Display/reference fields (from SRD or authored) ---
+  desc?: string;
+  higher_level?: string;
+  level?: number;
+  school?: string;
+  casting_time?: string;
+  duration?: string;
+  components?: string;
+  material?: string;
+  ritual?: boolean;
+  range?: string;
+  damageType?: string;
+  dice?: string;
+  saveStat?: string;
+  saveOnSuccess?: string;
+  areaOfEffect?: string;
+  classes?: string;
 }
 
 export type TagTrigger = "start_of_turn" | "end_of_turn" | "when_damaged";

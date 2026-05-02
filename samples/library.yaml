@@ -1,8 +1,3 @@
-# Actions Library
-
-Standard actions and abilities available to all combatants.
-
-```yaml
 actions:
   # --- Standard Actions ---
   - name: Grapple
@@ -115,4 +110,3 @@ actions:
     verb: "strikes"
     dmg: [{dice: "1+STR", type: bludgeoning}]
     note: "Punch, kick, headbutt, or similar."
-```
