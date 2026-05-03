@@ -109,6 +109,11 @@
         if (tag.trigger === "when_damaged" && tag.name.startsWith("Concentration:")) {
           banners.push({ tag, combatantId: combatant.id, combatantName: combatant.name });
         }
+
+        // when_targeted: fires when this combatant is selected as a target in the action bar
+        if (tag.trigger === "when_targeted" && encounter.pendingTargetIds.includes(combatant.id)) {
+          banners.push({ tag, combatantId: combatant.id, combatantName: combatant.name });
+        }
       }
     }
 
@@ -195,18 +200,31 @@
   let resolvingTagId = $state<string | null>(null);
   let resolveAmount = $state<number>(0);
   let resolveOutcome = $state<"full" | "half" | "zero">("full");
+  let resolveTargetId = $state<string | null>(null);
 
   function startResolve(tagId: string) {
-    resolvingTagId = resolvingTagId === tagId ? null : tagId;
+    if (resolvingTagId === tagId) {
+      resolvingTagId = null;
+      return;
+    }
+    resolvingTagId = tagId;
     resolveAmount = 0;
     resolveOutcome = "full";
+    // Pre-select resolveTarget from the tag, or null to require picking
+    const tag = encounter.combatants
+      .flatMap((c) => c.tags)
+      .find((t) => t.id === tagId);
+    resolveTargetId = tag?.resolveTarget ?? null;
   }
 
   function commitResolve(banner: TagBanner) {
     const tag = banner.tag;
     const sourceId = tag.source ?? banner.combatantId;
-    // resolveTarget overrides the banner's combatantId for damage/heal application
-    const targetId = tag.resolveTarget ?? banner.combatantId;
+    const targetId = resolveTargetId ?? tag.resolveTarget ?? banner.combatantId;
+    if (!targetId) return;
+
+    // Check uses; don't resolve if depleted
+    if (tag.uses && tag.uses.current <= 0) return;
 
     if (tag.isHeal && resolveAmount > 0) {
       commitHeal(encounter, {
@@ -232,7 +250,29 @@
       }
     }
 
+    // Decrement uses
+    if (tag.uses) {
+      tag.uses.current = Math.max(0, tag.uses.current - 1);
+    }
+
     resolvingTagId = null;
+    encounter.flush();
+  }
+
+  /** Spend one use of a tag without resolving damage/heal. For resources like Legendary Resistance. */
+  function spendUse(banner: TagBanner) {
+    const tag = banner.tag;
+    if (!tag.uses || tag.uses.current <= 0) return;
+    tag.uses.current--;
+
+    // Log the use
+    encounter.logInsert({
+      note: {
+        by: banner.combatantId,
+        text: `Used ${tag.name} (${tag.uses.current}/${tag.uses.max} remaining).`,
+      },
+    });
+
     encounter.flush();
   }
 
@@ -522,7 +562,7 @@
       {@const isConcentrationSave = banner.tag.name.startsWith("Concentration:")}
       <div class="dnd-obligation-banner" class:concentration={isConcentrationSave}>
         <div class="dnd-banner-title">
-          &#9888; {banner.combatantName}: {banner.tag.name}{#if banner.tag.resolveTarget} &rarr; {encounter.getCombatant(banner.tag.resolveTarget)?.name ?? banner.tag.resolveTarget}{/if}
+          &#9888; {banner.combatantName}: {banner.tag.name}{#if banner.tag.uses} <span class="dnd-uses-counter" class:depleted={banner.tag.uses.current <= 0}>({banner.tag.uses.current}/{banner.tag.uses.max})</span>{/if}{#if banner.tag.resolveTarget} &rarr; {encounter.getCombatant(banner.tag.resolveTarget)?.name ?? banner.tag.resolveTarget}{/if}
         </div>
         {#if banner.tag.onTrigger}
           <div class="dnd-banner-detail">{banner.tag.onTrigger}</div>
@@ -539,8 +579,15 @@
             <button
               class="dnd-banner-btn dnd-resolve-btn"
               class:active={resolvingTagId === banner.tag.id}
+              disabled={!!banner.tag.uses && banner.tag.uses.current <= 0}
               onclick={() => startResolve(banner.tag.id)}
             >Resolve</button>
+          {:else if banner.tag.uses}
+            <button
+              class="dnd-banner-btn pass"
+              disabled={banner.tag.uses.current <= 0}
+              onclick={() => spendUse(banner)}
+            >Use</button>
           {/if}
           {#if srdSpellName}
             <button
@@ -560,6 +607,20 @@
               <span class="dnd-resolve-dice">Roll: {banner.tag.dice} {banner.tag.damageType ?? (banner.tag.isHeal ? "healing" : "")}</span>
             {/if}
             <div class="dnd-resolve-controls">
+              {#if !banner.tag.resolveTarget}
+                <select
+                  class="dnd-action-input"
+                  value={resolveTargetId ?? ""}
+                  onchange={(e) => { resolveTargetId = (e.target as HTMLSelectElement).value || null; }}
+                >
+                  <option value="">Target...</option>
+                  {#each encounter.livingCombatants as combatant (combatant.id)}
+                    {#if combatant.id !== (banner.tag.source ?? banner.combatantId)}
+                      <option value={combatant.id}>{combatant.name}</option>
+                    {/if}
+                  {/each}
+                </select>
+              {/if}
               <input
                 type="number"
                 inputmode="numeric"

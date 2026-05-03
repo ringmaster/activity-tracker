@@ -60,6 +60,12 @@ export interface ActionEffect {
   damageType?: string;
   /** For deferred damage: save info. */
   save?: { stat: string; onSave?: string };
+  /** If true, this effect is auto-applied as a tag when the encounter starts. */
+  active_at_start?: boolean;
+  /** Limited uses for this effect's tag. */
+  uses?: number;
+  /** When to reset uses to max. "turn" = start of tag carrier's turn. */
+  resetOn?: "turn";
 }
 
 export interface CombatAction {
@@ -102,7 +108,7 @@ export interface CombatAction {
   _source?: string;
 }
 
-export type TagTrigger = "start_of_turn" | "end_of_turn" | "when_damaged" | "on_ally_turn" | "on_enemy_turn";
+export type TagTrigger = "start_of_turn" | "end_of_turn" | "when_damaged" | "on_ally_turn" | "on_enemy_turn" | "when_targeted";
 
 export interface CombatTag {
   id: string;
@@ -124,6 +130,10 @@ export interface CombatTag {
   resolveTarget?: string;
   /** Groups tags from the same action commit for cascade cleanup. */
   castId?: string;
+  /** Limited uses. Resolve/use decrements current. Banner disables at 0. */
+  uses?: { current: number; max: number };
+  /** When to reset uses to max. "turn" = start of tag carrier's turn. Absent = never. */
+  resetOn?: "turn";
 }
 
 export interface Combatant {
@@ -133,6 +143,10 @@ export interface Combatant {
   statblock?: string;
   init: number | null;
   ac?: number;
+  /** Default attack roll bonus for this combatant's actions. */
+  toHit?: number;
+  /** Default spell attack bonus for this combatant's spells. */
+  spellAttack?: number;
   hp?: { current: number; max: number };
   damage_taken?: number;
   temp_hp: number;

@@ -386,6 +386,15 @@
   color: var(--text-error);
 }
 
+.dnd-uses-counter {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.dnd-uses-counter.depleted {
+  color: var(--text-error, #f87171);
+}
+
 .dnd-banner-detail {
   font-size: 13px;
   color: var(--text-muted);
@@ -1193,6 +1202,31 @@
 
 .dnd-show-log-btn:active {
   background: var(--background-modifier-hover);
+}
+
+/* ---------- Library load results ---------- */
+.dnd-library-load-results {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  animation: dnd-fade-in 0.2s ease-out;
+}
+.dnd-library-load-result {
+  padding: 1px 0;
+}
+.dnd-library-check {
+  color: var(--text-success, #4ade80);
+}
+.dnd-library-x {
+  color: var(--text-error, #f87171);
+}
+.dnd-library-missing {
+  font-style: italic;
+  opacity: 0.7;
+}
+@keyframes dnd-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ---------- Full encounter log ---------- */

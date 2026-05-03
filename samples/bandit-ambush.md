@@ -7,18 +7,15 @@ combatants:
     type: npc
     statblock: "Bandit Captain"
     ac: 15
+    toHit: 5
     hp:
       current: 65
       max: 65
     actions:
       - name: Flame Tongue Scimitar
         type: attack
-        toHit: 5
         dmg: [{dice: "1d6+3", type: slashing}, {dice: "2d6", type: fire}]
-      - name: Dagger
-        type: attack
-        toHit: 5
-        dmg: [{dice: "1d4+3", type: piercing}]
+      - Dagger
       - name: Multiattack
         type: multiattack
         note: "Three melee attacks: two Flame Tongue Scimitars, one Dagger."
@@ -48,32 +45,26 @@ combatants:
     type: npc
     statblock: Bandit
     ac: 12
+    toHit: 3
     hp:
       current: 11
       max: 11
     count: 3
     actions:
-      - name: Scimitar
-        type: attack
-        toHit: 3
-        dmg: [{dice: "1d6+1", type: slashing}]
-      - name: Light Crossbow
-        type: attack
-        toHit: 3
-        dmg: [{dice: "1d8+1", type: piercing}]
+      - Scimitar
+      - Light Crossbow
       - Grapple
   - name: Bandit Mage
     type: npc
     statblock: "Bandit Mage"
     ac: 12
+    toHit: 3
+    spellAttack: 5
     hp:
       current: 22
       max: 22
     actions:
-      - name: Dagger
-        type: attack
-        toHit: 3
-        dmg: [{dice: "1d4+1", type: piercing}]
+      - Dagger
     spells:
       - Fire Bolt
       - Burning Hands

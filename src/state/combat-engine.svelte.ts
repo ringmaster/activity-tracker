@@ -1,5 +1,5 @@
 import type { EncounterState } from "./encounter-state.svelte";
-import type { Combatant, CombatAction } from "../types/encounter";
+import type { Combatant, CombatAction, ActionEffect } from "../types/encounter";
 import type { PartyMember } from "../types/party";
 import { rollInitiative } from "../utils/dice";
 import { nowTimestamp } from "../utils/time";
@@ -118,6 +118,9 @@ export function startEncounter(
   state.active = true;
   state.round = 1;
 
+  // Apply active_at_start effects as tags on their combatants
+  applyStartEffects(state);
+
   const now = nowTimestamp();
   state.log.push({ start_combat: { at: now } });
   state.log.push({ start_round: { n: 1, at: now } });
@@ -131,6 +134,40 @@ export function startEncounter(
     state.log.push({
       start_turn: { who: first.id, init: first.init ?? 0, at: now },
     });
+  }
+}
+
+/** Scan all combatants for actions with active_at_start effects and apply them as tags.
+ *  Skips effects that already have a matching tag (for resume after pause). */
+function applyStartEffects(state: EncounterState): void {
+  for (const combatant of state.combatants) {
+    const actions = combatant.actions ?? [];
+    for (const action of actions) {
+      if (typeof action === "string") continue;
+      const effects = action.effects ?? [];
+      for (const effect of effects) {
+        if (!effect.active_at_start) continue;
+        if (effect.type !== "tag" && effect.type !== "heal" && effect.type !== "damage") continue;
+        const tagName = effect.name ?? action.name;
+        // Don't duplicate if the tag already exists
+        if (combatant.tags.some((t) => t.name === tagName)) continue;
+        combatant.tags.push({
+          id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: tagName,
+          source: combatant.id,
+          note: effect.note,
+          trigger: effect.trigger,
+          onTrigger: effect.note,
+          autoRemove: "manual",
+          damageType: effect.type === "heal" ? undefined : effect.damageType,
+          dice: effect.dice,
+          save: effect.save,
+          isHeal: effect.type === "heal" || undefined,
+          uses: effect.uses ? { current: effect.uses, max: effect.uses } : undefined,
+          resetOn: effect.resetOn,
+        });
+      }
+    }
   }
 }
 
@@ -205,6 +242,13 @@ export function nextTurn(state: EncounterState): void {
   const actor = sorted[nextIdx];
   if (actor.legendary_actions) {
     actor.legendary_actions.current = actor.legendary_actions.max;
+  }
+
+  // Reset tag uses that refresh on turn start
+  for (const tag of actor.tags) {
+    if (tag.uses && tag.resetOn === "turn") {
+      tag.uses.current = tag.uses.max;
+    }
   }
 
   state.flushNow();

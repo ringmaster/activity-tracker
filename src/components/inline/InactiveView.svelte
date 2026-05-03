@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import { resetEncounter } from "../../state/combat-engine.svelte";
-  import { invalidateLibraryCache, loadLibrary } from "../../state/library-loader";
+  import { loadLibraryWithResults, type LibraryLoadResult } from "../../state/library-loader";
   import { summarizeLogEntry } from "../../utils/log-summary";
   import CombatantRow from "./CombatantRow.svelte";
 
@@ -14,6 +14,15 @@
   let hasBeenStarted = $derived(encounter.round > 0 || encounter.log.length > 0);
   let confirmReset = $state(false);
   let showLog = $state(false);
+  let libraryLoadResults = $state<LibraryLoadResult[] | null>(null);
+  let libraryLoadTimer: ReturnType<typeof setTimeout> | null = null;
+
+  async function handleReloadLibrary() {
+    const results = await loadLibraryWithResults(encounter.app, encounter.libraryPaths);
+    libraryLoadResults = results;
+    if (libraryLoadTimer) clearTimeout(libraryLoadTimer);
+    libraryLoadTimer = setTimeout(() => { libraryLoadResults = null; }, 4000);
+  }
 
   let fullLog = $derived.by(() => {
     if (!showLog) return [];
@@ -23,6 +32,11 @@
   });
 
   function handleContinue() {
+    // Remove the end_combat entry so the log is continuous when resumed
+    const lastIdx = encounter.log.length - 1;
+    if (lastIdx >= 0 && "end_combat" in encounter.log[lastIdx]) {
+      encounter.log.splice(lastIdx, 1);
+    }
     encounter.active = true;
     encounter.flushNow();
   }
@@ -80,10 +94,7 @@
 
       <button
         class="dnd-show-log-btn"
-        onclick={async () => {
-          invalidateLibraryCache();
-          await loadLibrary(encounter.app, encounter.libraryPaths);
-        }}
+        onclick={handleReloadLibrary}
       >Reload library</button>
       {#if hasBeenStarted}
         <button
@@ -92,6 +103,20 @@
         >{showLog ? "Hide log" : "Show log"}</button>
       {/if}
     </div>
+
+    {#if libraryLoadResults}
+      <div class="dnd-library-load-results">
+        {#each libraryLoadResults as result}
+          <div class="dnd-library-load-result" class:missing={!result.found}>
+            {#if result.found}
+              <span class="dnd-library-check">&#10003;</span> {result.label} ({result.count})
+            {:else}
+              <span class="dnd-library-x">&#10007;</span> {result.label} <span class="dnd-library-missing">not found</span>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
   {/if}
 
   {#if showLog && fullLog.length > 0}

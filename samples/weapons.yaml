@@ -1,0 +1,158 @@
+actions:
+  # --- Simple Melee Weapons ---
+  - name: Club
+    type: attack
+    dmg: [{dice: "1d4", type: bludgeoning}]
+
+  - name: Dagger
+    type: attack
+    dmg: [{dice: "1d4", type: piercing}]
+
+  - name: Greatclub
+    type: attack
+    dmg: [{dice: "1d8", type: bludgeoning}]
+
+  - name: Handaxe
+    type: attack
+    dmg: [{dice: "1d6", type: slashing}]
+
+  - name: Javelin
+    type: attack
+    dmg: [{dice: "1d6", type: piercing}]
+
+  - name: Light Hammer
+    type: attack
+    dmg: [{dice: "1d4", type: bludgeoning}]
+
+  - name: Mace
+    type: attack
+    dmg: [{dice: "1d6", type: bludgeoning}]
+
+  - name: Quarterstaff
+    type: attack
+    dmg: [{dice: "1d6", type: bludgeoning}]
+
+  - name: Sickle
+    type: attack
+    dmg: [{dice: "1d4", type: slashing}]
+
+  - name: Spear
+    type: attack
+    dmg: [{dice: "1d6", type: piercing}]
+
+  # --- Simple Ranged Weapons ---
+  - name: Light Crossbow
+    type: attack
+    dmg: [{dice: "1d8", type: piercing}]
+
+  - name: Dart
+    type: attack
+    dmg: [{dice: "1d4", type: piercing}]
+
+  - name: Shortbow
+    type: attack
+    dmg: [{dice: "1d6", type: piercing}]
+
+  - name: Sling
+    type: attack
+    dmg: [{dice: "1d4", type: bludgeoning}]
+
+  # --- Martial Melee Weapons ---
+  - name: Battleaxe
+    type: attack
+    dmg: [{dice: "1d8", type: slashing}]
+
+  - name: Flail
+    type: attack
+    dmg: [{dice: "1d8", type: bludgeoning}]
+
+  - name: Glaive
+    type: attack
+    dmg: [{dice: "1d10", type: slashing}]
+
+  - name: Greataxe
+    type: attack
+    dmg: [{dice: "1d12", type: slashing}]
+
+  - name: Greatsword
+    type: attack
+    dmg: [{dice: "2d6", type: slashing}]
+
+  - name: Halberd
+    type: attack
+    dmg: [{dice: "1d10", type: slashing}]
+
+  - name: Lance
+    type: attack
+    dmg: [{dice: "1d12", type: piercing}]
+
+  - name: Longsword
+    type: attack
+    dmg: [{dice: "1d8", type: slashing}]
+
+  - name: Maul
+    type: attack
+    dmg: [{dice: "2d6", type: bludgeoning}]
+
+  - name: Morningstar
+    type: attack
+    dmg: [{dice: "1d8", type: piercing}]
+
+  - name: Pike
+    type: attack
+    dmg: [{dice: "1d10", type: piercing}]
+
+  - name: Rapier
+    type: attack
+    dmg: [{dice: "1d8", type: piercing}]
+
+  - name: Scimitar
+    type: attack
+    dmg: [{dice: "1d6", type: slashing}]
+
+  - name: Shortsword
+    type: attack
+    dmg: [{dice: "1d6", type: piercing}]
+
+  - name: Trident
+    type: attack
+    dmg: [{dice: "1d6", type: piercing}]
+
+  - name: War Pick
+    type: attack
+    dmg: [{dice: "1d8", type: piercing}]
+
+  - name: Warhammer
+    type: attack
+    dmg: [{dice: "1d8", type: bludgeoning}]
+
+  - name: Whip
+    type: attack
+    dmg: [{dice: "1d4", type: slashing}]
+
+  # --- Martial Ranged Weapons ---
+  - name: Blowgun
+    type: attack
+    dmg: [{dice: "1", type: piercing}]
+
+  - name: Hand Crossbow
+    type: attack
+    dmg: [{dice: "1d6", type: piercing}]
+
+  - name: Heavy Crossbow
+    type: attack
+    dmg: [{dice: "1d10", type: piercing}]
+
+  - name: Longbow
+    type: attack
+    dmg: [{dice: "1d8", type: piercing}]
+
+  - name: Net
+    type: attack
+    verb: "throws a net at"
+    note: "Large or smaller creature is restrained. DC 10 STR check or 5 slashing damage to net (AC 10) to escape."
+    effects:
+      - type: tag
+        name: restrained (net)
+        on: target
+        note: "DC 10 STR or 5 slashing to net (AC 10) to escape"

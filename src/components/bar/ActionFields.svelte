@@ -139,10 +139,19 @@
     source?: string;
   }
 
-  /** Build authoredDmg from either the dmg array or the top-level damageType/dice fields. */
+  /** Build authoredDmg from either the dmg array or the top-level damageType/dice fields.
+   *  Skips top-level damageType when effects already include deferred damage via a tag. */
   function getDmgFromAction(action: CombatAction): AuthoredDamage[] | undefined {
     if (action.dmg && action.dmg.length > 0) return action.dmg;
-    if (action.damageType) return [{ dice: action.dice ?? "", type: action.damageType }];
+    if (action.damageType) {
+      // If the action has effects with deferred damage tags, the top-level
+      // damageType is just spell card metadata; damage resolves from the banner.
+      const hasDeferredDamage = action.effects?.some(
+        (e) => e.type === "tag" && (e.dice || e.damageType),
+      );
+      if (hasDeferredDamage) return undefined;
+      return [{ dice: action.dice ?? "", type: action.damageType }];
+    }
     return undefined;
   }
 
@@ -262,9 +271,22 @@
       .map(([id]) => id),
   );
 
+  // Sync selected targets to encounter state for when_targeted banners
+  $effect(() => {
+    encounter.pendingTargetIds = checkedTargetIds;
+    return () => { encounter.pendingTargetIds = []; };
+  });
+
+  let selfTargetWarning = $derived(
+    checkedTargetIds.length === 1
+    && checkedTargetIds[0] === encounter.effectiveActor?.id
+    && effects.some((e) => e.type === "damage"),
+  );
+
   let targetLabel = $derived.by(() => {
     const checked = checkedTargetIds;
     const actorName = encounter.effectiveActor?.name ?? "?";
+    const warn = selfTargetWarning ? " \u26A0\uFE0F" : "";
     if (checked.length === 0) {
       return preset === "attack" ? `${actorName} \u2192` : `${actorName} \u2192 Self`;
     }
@@ -272,7 +294,7 @@
       const c = encounter.getCombatant(checked[0]);
       const name = c?.name ?? checked[0];
       const ac = c?.ac != null ? ` (${c.ac})` : "";
-      return `\u2192 ${name}${ac}`;
+      return `\u2192 ${name}${ac}${warn}`;
     }
     return `\u2192 ${checked.length} targets`;
   });
@@ -304,10 +326,16 @@
       diceHint = parts.length > 0 ? parts.join(" + ") : null;
       if (preset !== "heal") setDamageEffects(action.authoredDmg);
     } else if (action.libAction?.damageType) {
-      diceHint = action.libAction.dice
-        ? `${action.libAction.dice} ${action.libAction.damageType}`
-        : null;
-      if (preset !== "heal") setDamageEffects([{ dice: "", type: action.libAction.damageType }]);
+      // Skip if damage is deferred via a tag effect (e.g., Spiritual Weapon)
+      const hasDeferredDamage = action.libAction.effects?.some(
+        (e) => e.type === "tag" && (e.dice || e.damageType),
+      );
+      if (!hasDeferredDamage) {
+        diceHint = action.libAction.dice
+          ? `${action.libAction.dice} ${action.libAction.damageType}`
+          : null;
+        if (preset !== "heal") setDamageEffects([{ dice: "", type: action.libAction.damageType }]);
+      }
     } else if (action.spellDmg && action.spellDmg.length > 0) {
       diceHint = null;
       if (preset !== "heal") setDamageEffects(action.spellDmg.map((d) => ({ dice: "", type: d.type })));
@@ -315,8 +343,14 @@
       diceHint = null;
     }
 
-    // Prepend attack bonus to dice hint
-    const toHit = action.toHit ?? action.libAction?.toHit;
+    // Prepend attack bonus to dice hint.
+    // Priority: action's own toHit > combatant's spellAttack (for spells) > combatant's toHit
+    const actor = encounter.effectiveActor;
+    const actionToHit = action.toHit ?? action.libAction?.toHit;
+    const defaultToHit = action.isSpell
+      ? (actor?.spellAttack ?? actor?.toHit)
+      : actor?.toHit;
+    const toHit = actionToHit ?? defaultToHit;
     if (toHit != null) {
       const bonus = toHit >= 0 ? `+${toHit} to hit` : `${toHit} to hit`;
       diceHint = diceHint ? `${bonus}; ${diceHint}` : bonus;
@@ -357,6 +391,11 @@
             note: ae.note ?? "",
             trigger: ae.trigger ?? "",
             _on: ae.on ?? "target",
+            _damageType: ae.damageType,
+            _dice: ae.dice,
+            _save: ae.save,
+            _uses: ae.uses,
+            _resetOn: ae.resetOn,
             _auto: true,
           } as any];
           autoTagIndices = new Set([...autoTagIndices, newIdx]);
@@ -665,6 +704,9 @@
         const hasDeferredEffect = !!(tagAny._damageType || tagAny._isHeal);
         const effectOn = tagAny._on ?? "target";
 
+        const tagUses = tagAny._uses ? { current: tagAny._uses, max: tagAny._uses } : undefined;
+        const tagResetOn = tagAny._resetOn || undefined;
+
         if (hasDeferredEffect && (effectOn === "self" || effectOn === "enemy" || effectOn === "ally")) {
           // Deferred effect on self/enemy/ally: tag goes on the ACTOR
           // with resolveTarget pointing to the selected target(s)
@@ -683,6 +725,8 @@
             save: tagAny._save || undefined,
             isHeal: tagAny._isHeal || undefined,
             resolveTarget: firstTarget !== actor.id ? firstTarget : undefined,
+            uses: tagUses,
+            resetOn: tagResetOn,
           });
         } else if (effectOn === "self") {
           // Tag goes on the actor
@@ -695,6 +739,8 @@
             onTrigger: tagEffect.note || undefined,
             autoRemove: "manual",
             castId,
+            uses: tagUses,
+            resetOn: tagResetOn,
           });
         } else {
           // Tag goes on each selected target
@@ -709,7 +755,9 @@
               trigger: tagEffect.trigger || undefined,
               onTrigger: tagEffect.note || undefined,
               autoRemove: "manual",
-            castId,
+              castId,
+              uses: tagUses,
+              resetOn: tagResetOn,
             });
           }
         }
@@ -984,8 +1032,9 @@
         onmousedown={() => selectAction(action)}
       >
         <span class="dnd-via-name">{action.name}</span>
-        {#if action.toHit != null}
-          <span class="dnd-via-tohit">+{action.toHit}</span>
+        {#if (action.toHit ?? action.libAction?.toHit ?? (action.isSpell ? encounter.effectiveActor?.spellAttack : encounter.effectiveActor?.toHit)) != null}
+          {@const effectiveToHit = action.toHit ?? action.libAction?.toHit ?? (action.isSpell ? (encounter.effectiveActor?.spellAttack ?? encounter.effectiveActor?.toHit) : encounter.effectiveActor?.toHit)}
+          <span class="dnd-via-tohit">+{effectiveToHit}</span>
         {/if}
         {#if action.authoredDmg && action.authoredDmg.length > 0}
           <span class="dnd-via-detail">

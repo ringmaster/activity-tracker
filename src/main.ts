@@ -26,7 +26,7 @@ interface ActivityTrackerSettings {
 
 const DEFAULT_SETTINGS: ActivityTrackerSettings = {
   partyNotePath: "party.yaml",
-  libraryPaths: "library.yaml, srd-library.yaml",
+  libraryPaths: "library.yaml, weapons.yaml, srd-library.yaml",
   codeBlockLanguage: "dnd-combat",
   debugOverlay: false,
 };

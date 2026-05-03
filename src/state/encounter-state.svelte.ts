@@ -33,6 +33,8 @@ export class EncounterState {
   currentTurnLogIndex = $state<number>(-1);
   /** Last selected target IDs for the current turn; persists across action commits. */
   lastTargetIds = $state<string[]>([]);
+  /** Currently selected target IDs in the action bar (transient, for when_targeted banners). */
+  pendingTargetIds = $state<string[]>([]);
 
   // Derived values
   sortedCombatants = $derived(
@@ -265,6 +267,8 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
   }
 
   if (partial.ac != null) base.ac = partial.ac;
+  if (partial.toHit != null) base.toHit = partial.toHit;
+  if (partial.spellAttack != null) base.spellAttack = partial.spellAttack;
   if (partial.actions) base.actions = partial.actions;
   if (partial.spells) base.spells = partial.spells;
   if (partial.statblock) base.statblock = partial.statblock;

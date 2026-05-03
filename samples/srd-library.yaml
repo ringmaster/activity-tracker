@@ -4756,6 +4756,13 @@ spells:
       A creature is unaffected by this spell if it can't see, if it relies on senses other than sight, such as
       blindsight, or if it can perceive illusions as false, as with truesight.
     classes: Sorcerer, Warlock, Wizard
+    effects:
+      - type: tag
+        name: Mirror Image
+        on: self
+        trigger: when_targeted
+        note: "Duplicates absorb attacks. d20: 6+ (3 left), 8+ (2 left), 11+ (1 left). Duplicate AC = 10+DEX."
+        uses: 3
   - name: Mislead
     level: 5
     school: Illusion

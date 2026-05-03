@@ -54,8 +54,10 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
 
     // Self-targeted: drop "on [self]"
     if (selfOnly) {
-      if (customVerb) return `${actorName} ${customVerb} ${entry.attack.via}.`;
-      if (isSpell) return `${actorName} cast ${entry.attack.via}.`;
+      // For self-only spells with no damage, use "cast" regardless of custom verb
+      // (the verb is for the resolve/attack phase, not the initial cast)
+      if (customVerb && !allNoDamage) return `${actorName} ${customVerb} ${entry.attack.via}.`;
+      if (isSpell || customVerb) return `${actorName} cast ${entry.attack.via}.`;
       return `${actorName} used ${entry.attack.via}.`;
     }
 

@@ -50,6 +50,54 @@ export async function loadLibrary(
   return allActions;
 }
 
+export interface LibraryLoadResult {
+  path: string;
+  label: string;
+  count: number;
+  found: boolean;
+}
+
+/**
+ * Load libraries and return per-file results for UI feedback.
+ * Always invalidates the cache first to force a fresh load.
+ */
+export async function loadLibraryWithResults(
+  app: App,
+  paths: string,
+): Promise<LibraryLoadResult[]> {
+  invalidateLibraryCache();
+
+  const results: LibraryLoadResult[] = [];
+  const allActions: CombatAction[] = [];
+  const pathList = paths.split(",").map((p) => p.trim()).filter((p) => p.length > 0);
+
+  for (const path of pathList) {
+    const label = path
+      .replace(/^.*\//, "")
+      .replace(/\.\w+$/, "")
+      .replace(/[-_]/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
+    const file = app.vault.getAbstractFileByPath(path);
+    if (!file || !("extension" in file)) {
+      results.push({ path, label, count: 0, found: false });
+      continue;
+    }
+
+    const content = await app.vault.read(file as TFile);
+    const parsed = parseLibraryContent(content);
+    for (const action of parsed) {
+      action._source = label;
+    }
+    allActions.push(...parsed);
+    results.push({ path, label, count: parsed.length, found: true });
+  }
+
+  cachedLibrary = allActions;
+  cachedPaths = paths;
+  return results;
+}
+
 /** Synchronous access to the cached library. */
 export function getCachedLibrary(): CombatAction[] {
   return cachedLibrary;
