@@ -129,7 +129,7 @@
   <div class="dnd-dropdown-row" style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
     Swap Actor
   </div>
-  {#each encounter.sortedCombatants as combatant (combatant.id)}
+  {#each encounter.sortedCombatants.filter((c) => c.type !== "object") as combatant (combatant.id)}
     <button
       class="dnd-dropdown-row"
       class:current={combatant.id === encounter.currentTurn}

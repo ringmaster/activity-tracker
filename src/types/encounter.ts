@@ -108,7 +108,7 @@ export interface CombatAction {
   _source?: string;
 }
 
-export type TagTrigger = "start_of_turn" | "end_of_turn" | "when_damaged" | "on_ally_turn" | "on_enemy_turn" | "when_targeted";
+export type TagTrigger = "start_of_turn" | "end_of_turn" | "when_damaged" | "on_ally_turn" | "on_enemy_turn" | "when_targeted" | "when_destroyed";
 
 export interface CombatTag {
   id: string;
@@ -139,7 +139,7 @@ export interface CombatTag {
 export interface Combatant {
   id: string;
   name: string;
-  type: "npc" | "pc";
+  type: "npc" | "pc" | "object";
   statblock?: string;
   init: number | null;
   ac?: number;
@@ -170,7 +170,7 @@ export interface Combatant {
 export interface AuthoredCombatant {
   id?: string;
   name: string;
-  type: "npc" | "pc";
+  type: "npc" | "pc" | "object";
   statblock?: string;
   init?: number | null;
   ac?: number;
@@ -179,6 +179,7 @@ export interface AuthoredCombatant {
   damage_taken?: number;
   temp_hp?: number;
   conditions?: string[];
+  tags?: CombatTag[];
   concentration?: { spell: string; line_ref: number } | null;
   /** Authored as plain numbers (max slots); normalized to {current, max} at load. */
   spell_slots?: Record<number, number | { current: number; max: number }>;

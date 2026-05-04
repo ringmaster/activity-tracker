@@ -69,7 +69,7 @@
         <span class="dnd-combatant-ac">AC</span>
         <span class="dnd-combatant-hp">HP</span>
       </li>
-      {#each encounter.combatants as combatant (combatant.id)}
+      {#each encounter.combatants.filter((c) => c.type !== "object") as combatant (combatant.id)}
         <CombatantRow {combatant} />
       {/each}
     </ul>

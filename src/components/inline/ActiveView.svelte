@@ -37,7 +37,7 @@
       <span class="dnd-combatant-ac">AC</span>
       <span class="dnd-combatant-hp">Dmg</span>
     </li>
-    {#each encounter.sortedCombatants as combatant (combatant.id)}
+    {#each encounter.sortedCombatants.filter((c) => c.type !== "object") as combatant (combatant.id)}
       <CombatantRow
         {combatant}
         isCurrent={combatant.id === encounter.currentTurn}

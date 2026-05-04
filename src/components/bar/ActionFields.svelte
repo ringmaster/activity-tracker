@@ -7,6 +7,7 @@
   import { findLibraryAction, searchLibrary } from "../../state/library-loader";
   import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
   import DamageTypeIcon from "../shared/DamageTypeIcon.svelte";
+  import AddTargetForm from "./AddTargetForm.svelte";
 
   type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "failed";
 
@@ -66,6 +67,7 @@
   let showViaSuggestions = $state(false);
   let showEffectPicker = $state(false);
   let showAutoTags = $state(false);
+  let addingTarget = $state(false);
   /** Track which tag indices are auto-populated from the library definition. */
   let autoTagIndices = $state<Set<number>>(new Set());
 
@@ -794,6 +796,19 @@
   }
 </script>
 
+{#if addingTarget}
+  <AddTargetForm
+    {encounter}
+    onCancel={() => {
+      addingTarget = false;
+      showTargets = true;
+    }}
+    onCreate={(combatantId) => {
+      targets[combatantId] = { checked: true, outcome: "full" };
+      addingTarget = false;
+    }}
+  />
+{:else}
 <div class="dnd-action-bar">
   <button class="dnd-bar-btn active" onclick={onDone} title="Cancel">{cancelIcon}</button>
 
@@ -1071,9 +1086,14 @@
         viaInput?.focus();
       });
     }}
+    onAddTarget={() => {
+      showTargets = false;
+      addingTarget = true;
+    }}
     damageType={(() => {
       const dmg = effects.find((e) => e.type === "damage") as DamageEffect | undefined;
       return dmg?.damageType;
     })()}
   />
+{/if}
 {/if}

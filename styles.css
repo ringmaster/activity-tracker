@@ -1044,6 +1044,52 @@
   min-width: 120px;
 }
 
+/* ---------- Add target form ---------- */
+.dnd-target-type-radio {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.dnd-target-type-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dnd-target-type-btn:active {
+  background: var(--background-modifier-hover);
+}
+
+.dnd-target-type-btn.selected {
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.dnd-target-type-icon {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.dnd-target-type-icon svg {
+  display: block;
+}
+
+.dnd-target-type-icon svg path {
+  fill: currentColor;
+}
+
 /* ---------- Damage type icons ---------- */
 .dnd-dmg-type-icon-wrapper {
   display: inline-flex;

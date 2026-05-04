@@ -6,7 +6,7 @@ import { nowTimestamp } from "../utils/time";
 
 /** Check if a combatant should be skipped in turn order. */
 function isOutOfCombat(c: Combatant): boolean {
-  return c.conditions.includes("dead") || c.conditions.includes("fled");
+  return c.type === "object" || c.conditions.includes("dead") || c.conditions.includes("fled");
 }
 import { getCreature } from "./statblocks-api";
 import type { App } from "obsidian";

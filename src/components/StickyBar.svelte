@@ -9,6 +9,7 @@
   import DefaultBar from "./bar/DefaultBar.svelte";
   import ActionBar from "./bar/ActionBar.svelte";
   import BannerStack from "./banners/BannerStack.svelte";
+  import TargetsDropdown from "./dropdowns/TargetsDropdown.svelte";
 
   let { encounter }: { encounter: EncounterState } = $props();
 
@@ -70,10 +71,23 @@
     const banners: TagBanner[] = [];
 
     for (const combatant of encounter.combatants ?? []) {
-      if (!(combatant.tags ?? []).length || (combatant.conditions ?? []).includes("dead")) continue;
+      if (!(combatant.tags ?? []).length) continue;
+      const isDead = (combatant.conditions ?? []).includes("dead");
 
       for (const tag of combatant.tags) {
         if (!tag.trigger) continue;
+
+        // when_destroyed: fires once HP is at 0 (combatant marked dead). Surfaces
+        // even on dead combatants so destruction effects can be resolved.
+        if (tag.trigger === "when_destroyed") {
+          if (isDead) {
+            banners.push({ tag, combatantId: combatant.id, combatantName: combatant.name });
+          }
+          continue;
+        }
+
+        // All other triggers skip dead combatants
+        if (isDead) continue;
 
         // start_of_turn / end_of_turn: fires for the combatant carrying the tag
         if ((tag.trigger === "start_of_turn" || tag.trigger === "end_of_turn")
@@ -199,29 +213,35 @@
   // Resolve flow state for deferred damage/heal banners
   let resolvingTagId = $state<string | null>(null);
   let resolveAmount = $state<number>(0);
-  let resolveOutcome = $state<"full" | "half" | "zero">("full");
-  let resolveTargetId = $state<string | null>(null);
+  let resolveTargets = $state<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>({});
+  let showResolveTargets = $state(false);
 
   function startResolve(tagId: string) {
     if (resolvingTagId === tagId) {
       resolvingTagId = null;
+      showResolveTargets = false;
       return;
     }
     resolvingTagId = tagId;
     resolveAmount = 0;
-    resolveOutcome = "full";
-    // Pre-select resolveTarget from the tag, or null to require picking
+    showResolveTargets = false;
+
+    // If the tag has a pre-set resolveTarget, seed the selection with it.
     const tag = encounter.combatants
       .flatMap((c) => c.tags)
       .find((t) => t.id === tagId);
-    resolveTargetId = tag?.resolveTarget ?? null;
+    resolveTargets = {};
+    if (tag?.resolveTarget) {
+      resolveTargets[tag.resolveTarget] = { checked: true, outcome: "full" };
+    }
   }
 
   function commitResolve(banner: TagBanner) {
     const tag = banner.tag;
     const sourceId = tag.source ?? banner.combatantId;
-    const targetId = resolveTargetId ?? tag.resolveTarget ?? banner.combatantId;
-    if (!targetId) return;
+
+    const checkedTargets = Object.entries(resolveTargets).filter(([_, t]) => t.checked);
+    if (checkedTargets.length === 0) return;
 
     // Check uses; don't resolve if depleted
     if (tag.uses && tag.uses.current <= 0) return;
@@ -231,23 +251,19 @@
         by: sourceId,
         via: tag.name,
         resolved: true,
-        targets: [{ who: targetId, hp: resolveAmount }],
+        targets: checkedTargets.map(([id]) => ({ who: id, hp: resolveAmount })),
       });
     } else if (tag.damageType && resolveAmount > 0) {
-      const dmgAmount = resolveOutcome === "zero" ? 0
-        : resolveOutcome === "half" ? Math.floor(resolveAmount / 2)
-        : resolveAmount;
-
-      if (dmgAmount > 0) {
-        commitAttack(encounter, {
-          by: sourceId,
-          via: tag.name,
-          isSpell: true,
-          resolved: true,
-          baseDmg: [{ n: dmgAmount, type: tag.damageType }],
-          targets: [{ who: targetId, outcome: resolveOutcome }],
-        });
-      }
+      // commitAttack scales baseDmg per-target via outcome (Hit/Half/Zero),
+      // so a single call covers all selected targets in one log entry.
+      commitAttack(encounter, {
+        by: sourceId,
+        via: tag.name,
+        isSpell: true,
+        resolved: true,
+        baseDmg: [{ n: resolveAmount, type: tag.damageType }],
+        targets: checkedTargets.map(([id, t]) => ({ who: id, outcome: t.outcome })),
+      });
     }
 
     // Decrement uses
@@ -256,8 +272,14 @@
     }
 
     resolvingTagId = null;
+    resolveTargets = {};
+    showResolveTargets = false;
     encounter.flush();
   }
+
+  let resolveCheckedCount = $derived(
+    Object.values(resolveTargets).filter((t) => t.checked).length,
+  );
 
   /** Spend one use of a tag without resolving damage/heal. For resources like Legendary Resistance. */
   function spendUse(banner: TagBanner) {
@@ -607,20 +629,13 @@
               <span class="dnd-resolve-dice">Roll: {banner.tag.dice} {banner.tag.damageType ?? (banner.tag.isHeal ? "healing" : "")}</span>
             {/if}
             <div class="dnd-resolve-controls">
-              {#if !banner.tag.resolveTarget}
-                <select
-                  class="dnd-action-input"
-                  value={resolveTargetId ?? ""}
-                  onchange={(e) => { resolveTargetId = (e.target as HTMLSelectElement).value || null; }}
-                >
-                  <option value="">Target...</option>
-                  {#each encounter.livingCombatants as combatant (combatant.id)}
-                    {#if combatant.id !== (banner.tag.source ?? banner.combatantId)}
-                      <option value={combatant.id}>{combatant.name}</option>
-                    {/if}
-                  {/each}
-                </select>
-              {/if}
+              <button
+                class="dnd-bar-btn"
+                class:active={showResolveTargets}
+                onclick={() => { showResolveTargets = !showResolveTargets; }}
+              >
+                {resolveCheckedCount === 0 ? "Targets" : `Targets (${resolveCheckedCount})`}
+              </button>
               <input
                 type="number"
                 inputmode="numeric"
@@ -630,19 +645,16 @@
                 oninput={(e) => { resolveAmount = parseInt((e.target as HTMLInputElement).value, 10) || 0; }}
                 onkeydown={(e) => { if (e.key === "Enter") commitResolve(banner); }}
               />
-              {#if banner.tag.damageType && banner.tag.save}
-                <div class="dnd-outcome-radios">
-                  <button class="dnd-outcome-radio" class:selected={resolveOutcome === "full"} onclick={() => { resolveOutcome = "full"; }}>
-                    {banner.tag.save.onSave === "half" ? "Fail" : "Hit"}
-                  </button>
-                  <button class="dnd-outcome-radio" class:selected={resolveOutcome === "half"} onclick={() => { resolveOutcome = "half"; }}>Half</button>
-                  <button class="dnd-outcome-radio" class:selected={resolveOutcome === "zero"} onclick={() => { resolveOutcome = "zero"; }}>
-                    {banner.tag.save.onSave === "half" ? "Save" : "Zero"}
-                  </button>
-                </div>
-              {/if}
               <button class="dnd-banner-btn active" onclick={() => commitResolve(banner)}>Apply</button>
             </div>
+            {#if showResolveTargets}
+              <TargetsDropdown
+                {encounter}
+                bind:selected={resolveTargets}
+                onClose={() => { showResolveTargets = false; }}
+                damageType={banner.tag.damageType}
+              />
+            {/if}
           </div>
         {/if}
 

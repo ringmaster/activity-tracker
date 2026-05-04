@@ -5,11 +5,13 @@
     encounter,
     selected = $bindable<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>({}),
     onClose,
+    onAddTarget,
     damageType,
   }: {
     encounter: EncounterState;
     selected: Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>;
     onClose?: () => void;
+    onAddTarget?: () => void;
     damageType?: string;
   } = $props();
 
@@ -102,7 +104,7 @@
         onclick={() => selectSingle(combatant.id)}
       >
         {combatant.name}
-        {#if combatant.type === "npc" && combatant.hp}
+        {#if (combatant.type === "npc" || combatant.type === "object") && combatant.hp}
           <span class="dnd-target-hp">{combatant.hp.current}/{combatant.hp.max}</span>
         {:else if combatant.type === "pc" && (combatant.damage_taken ?? 0) > 0}
           <span class="dnd-target-hp">dmg {combatant.damage_taken}</span>
@@ -138,7 +140,12 @@
     {/each}
   {/if}
 
-  <div class="dnd-dropdown-row" style="justify-content: flex-end;">
+  <div class="dnd-dropdown-row" style="justify-content: space-between;">
+    {#if onAddTarget}
+      <button class="dnd-bar-btn" onclick={onAddTarget}>+ Add Target</button>
+    {:else}
+      <span></span>
+    {/if}
     <button class="dnd-bar-btn" onclick={onClose}>Done</button>
   </div>
 </div>

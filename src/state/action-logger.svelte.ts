@@ -108,7 +108,7 @@ export function commitHeal(state: EncounterState, params: HealParams): void {
   for (const t of params.targets) {
     const combatant = state.getCombatant(t.who);
     if (!combatant) continue;
-    if (combatant.type === "npc" && combatant.hp) {
+    if ((combatant.type === "npc" || combatant.type === "object") && combatant.hp) {
       combatant.hp.current = Math.min(
         combatant.hp.current + t.hp,
         combatant.hp.max,
@@ -260,10 +260,10 @@ function applyDamage(state: EncounterState, targetId: string, amount: number): v
     remaining -= absorbed;
   }
 
-  if (combatant.type === "npc" && combatant.hp) {
+  if ((combatant.type === "npc" || combatant.type === "object") && combatant.hp) {
     combatant.hp.current = Math.max(0, combatant.hp.current - remaining);
 
-    // Auto-death at 0 HP for NPCs
+    // Auto-death at 0 HP for NPCs and objects
     if (combatant.hp.current === 0 && !combatant.conditions.includes("dead")) {
       combatant.conditions.push("dead");
       state.logInsert({ death: { who: targetId, at: nowTimestamp() } });

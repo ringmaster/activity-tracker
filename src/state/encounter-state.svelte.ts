@@ -245,7 +245,7 @@ function normalizeSpellSlots(
 }
 
 /** Fill in default values for combatant fields that may be absent in YAML. */
-function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name: string; type: "npc" | "pc" }): Combatant {
+function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name: string; type: "npc" | "pc" | "object" }): Combatant {
   const base: Combatant = {
     id: partial.id,
     name: partial.name,
@@ -262,6 +262,8 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
     base.spell_slots = normalizeSpellSlots(partial.spell_slots);
     base.legendary_actions = partial.legendary_actions ?? null;
     base.behavior = partial.behavior;
+  } else if (partial.type === "object") {
+    base.hp = partial.hp ?? { current: 0, max: 0 };
   } else {
     base.damage_taken = partial.damage_taken ?? 0;
   }
