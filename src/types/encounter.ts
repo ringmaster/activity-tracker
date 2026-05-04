@@ -110,6 +110,16 @@ export interface CombatAction {
 
 export type TagTrigger = "start_of_turn" | "end_of_turn" | "when_damaged" | "on_ally_turn" | "on_enemy_turn" | "when_targeted" | "when_destroyed";
 
+export interface Zone {
+  id: string;
+  name: string;
+}
+
+export interface ZonePosition {
+  id: string;
+  preposition?: string;
+}
+
 export interface CombatTag {
   id: string;
   name: string;
@@ -140,6 +150,7 @@ export interface Combatant {
   id: string;
   name: string;
   type: "npc" | "pc" | "object";
+  zone?: ZonePosition;
   statblock?: string;
   init: number | null;
   ac?: number;
@@ -171,6 +182,7 @@ export interface AuthoredCombatant {
   id?: string;
   name: string;
   type: "npc" | "pc" | "object";
+  zone?: ZonePosition;
   statblock?: string;
   init?: number | null;
   ac?: number;
@@ -230,6 +242,8 @@ export interface EncounterData {
   combatants: Combatant[];
   log: LogEntry[];
   active_obligations: ActiveObligation[];
+  zones?: Zone[];
+  prepositions?: string[];
 }
 
 /** The raw YAML shape before expansion (combatants may have `count`). */
@@ -241,4 +255,6 @@ export interface AuthoredEncounterData {
   combatants: AuthoredCombatant[];
   log?: LogEntry[];
   active_obligations?: ActiveObligation[];
+  zones?: Zone[];
+  prepositions?: string[];
 }

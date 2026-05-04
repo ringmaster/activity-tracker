@@ -394,6 +394,18 @@
       }
     }
 
+    // Revert move: restore the actor's prior zone, or undo a flee
+    if (entry.move) {
+      const combatant = encounter.getCombatant(entry.move.by);
+      if (combatant) {
+        if (entry.move.fled) {
+          combatant.conditions = combatant.conditions.filter((c) => c !== "fled");
+        } else {
+          combatant.zone = entry.move.from ?? undefined;
+        }
+      }
+    }
+
     // Remove the log entry
     encounter.log.splice(logIndex, 1);
 

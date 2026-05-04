@@ -1,4 +1,4 @@
-import type { DamageComponent } from "./encounter";
+import type { DamageComponent, ZonePosition } from "./encounter";
 
 export interface StartCombatEntry {
   start_combat: { at: string };
@@ -133,8 +133,9 @@ export interface TagEntry {
 export interface MoveEntry {
   move: {
     by: string;
-    verb: string;
-    target?: string;
+    from?: ZonePosition | null;
+    to?: ZonePosition;
+    fled?: boolean;
   };
 }
 

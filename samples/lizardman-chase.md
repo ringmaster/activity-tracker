@@ -2,6 +2,13 @@ A trio of lizardmen burst from the riverbank reeds clutching a stolen reliquary 
 
 ```dnd-combat
 encounter: "Lizardman Chase"
+zones:
+  - id: south
+    name: South of Bridge
+  - id: bridge
+    name: On Bridge
+  - id: north
+    name: North of Bridge
 combatants:
   - name: Murkwater Bridge
     id: murkwater-bridge
@@ -11,6 +18,7 @@ combatants:
     hp:
       current: 30
       max: 30
+    zone: { id: bridge }
     tags:
       - id: bridge-collapse
         name: Bridge Collapse

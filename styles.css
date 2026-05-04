@@ -561,32 +561,53 @@
 .dnd-icon-heal { color: #e04040; }
 .dnd-icon-move svg { fill: #60b0e0; }
 
-/* ---------- Move action buttons ---------- */
-.dnd-move-icon {
-  display: inline-block;
-  line-height: 0;
+/* ---------- Move bar (zone-based) ---------- */
+.dnd-move-bar {
+  flex-direction: column;
+  align-items: stretch;
 }
 
-.dnd-move-icon svg {
-  display: block;
+.dnd-move-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
-.dnd-move-icon svg path {
-  fill: inherit;
-}
-
-.dnd-icon-closes svg { fill: #60c060; }
-.dnd-icon-separates svg { fill: #e0a030; }
-.dnd-icon-distances svg { fill: #60b0e0; }
-.dnd-icon-flies svg { fill: #a0c8e0; }
-.dnd-icon-flees svg { fill: #e04040; }
-
-.dnd-move-btn {
+.dnd-zone-btn,
+.dnd-prep-btn,
+.dnd-move-flee-btn {
   padding: 4px 10px;
 }
 
-.dnd-move-flee {
+.dnd-zone-btn.selected,
+.dnd-prep-btn.selected,
+.dnd-move-flee-btn.selected {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.dnd-move-flee-btn {
   border-color: var(--text-error);
+}
+
+.dnd-move-flee-btn.selected {
+  background: var(--text-error);
+  border-color: var(--text-error);
+}
+
+.dnd-prep-icon {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.dnd-prep-icon svg {
+  display: block;
+}
+
+.dnd-prep-icon svg path {
+  fill: currentColor;
 }
 
 .dnd-combatant-caret {
@@ -846,6 +867,22 @@
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
+.dnd-zone-header-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 0 !important;
+  min-width: 0 !important;
+}
+
+.dnd-zone-header-btn:active {
+  background: var(--background-modifier-hover);
+}
+
 .dnd-target-row {
   display: flex;
   align-items: center;
@@ -879,6 +916,22 @@
   font-size: 11px;
   color: var(--text-muted);
   margin-left: 4px;
+}
+
+.dnd-target-prep {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-left: 4px;
+}
+
+.dnd-zone-here {
+  font-size: 10px;
+  color: var(--interactive-accent);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 6px;
+  font-weight: 400;
 }
 
 .dnd-target-checkbox {
@@ -1199,6 +1252,36 @@
 
 .dnd-auto-tags-pill.active {
   background: #1a3a4e;
+}
+
+.dnd-implicit-move-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  min-height: 36px !important;
+  min-width: 0 !important;
+  border: 1px solid #60b0e0;
+  border-radius: 6px;
+  background: #1a3a4e;
+  color: #a0d0f0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dnd-implicit-move-pill.active {
+  background: #2a4a5e;
+}
+
+.dnd-implicit-move-details {
+  max-width: 768px;
+  width: 100%;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .dnd-tag-widget {

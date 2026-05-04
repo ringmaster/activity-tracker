@@ -325,16 +325,18 @@ export async function resetEncounter(state: EncounterState): Promise<void> {
   state.swappedActor = null;
   state.activeAction = null;
 
-  // Keep only NPCs; remove PCs (they get re-added at encounter start)
+  // Keep NPCs and objects; remove PCs (they get re-added at encounter start).
+  // Objects keep their authored tags (e.g. when_destroyed effects) and init,
+  // since those are part of the encounter design rather than runtime state.
   state.combatants = state.combatants
-    .filter((c) => c.type === "npc")
+    .filter((c) => c.type === "npc" || c.type === "object")
     .map((c) => ({
       ...c,
-      init: null,
+      init: c.type === "object" ? c.init : null,
       hp: c.hp ? { current: c.hp.max, max: c.hp.max } : undefined,
       temp_hp: 0,
       conditions: [],
-      tags: [],
+      tags: c.type === "object" ? c.tags : [],
       concentration: null,
       legendary_actions: c.legendary_actions
         ? { max: c.legendary_actions.max, current: c.legendary_actions.max }

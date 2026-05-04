@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
-  import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction } from "../../types/encounter";
+  import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction, ZonePosition } from "../../types/encounter";
   import { renderSpellDescription } from "../../utils/spell-renderer";
   import { commitAttack, commitHeal, dropConcentration } from "../../state/action-logger.svelte";
   import { generateSpellTag, generateConcentrationTag } from "../../data/spell-tag-generator";
@@ -8,6 +8,7 @@
   import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
   import DamageTypeIcon from "../shared/DamageTypeIcon.svelte";
   import AddTargetForm from "./AddTargetForm.svelte";
+  import { PREPOSITION_ICONS, BUILTIN_PREPOSITIONS } from "../../icons/preposition-icons";
 
   type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "failed";
 
@@ -68,6 +69,13 @@
   let showEffectPicker = $state(false);
   let showAutoTags = $state(false);
   let addingTarget = $state(false);
+
+  // Implicit move state -- when the chosen action requires melee range and the
+  // selected target is in a different zone, surface a tile suggesting movement.
+  // The DM can edit the destination via disclosure or dismiss the move entirely.
+  let implicitMoveDismissed = $state(false);
+  let implicitMoveOverride = $state<ZonePosition | null>(null);
+  let showImplicitMoveDetails = $state(false);
   /** Track which tag indices are auto-populated from the library definition. */
   let autoTagIndices = $state<Set<number>>(new Set());
 
@@ -285,6 +293,40 @@
     && effects.some((e) => e.type === "damage"),
   );
 
+  /** True for spells whose SRD range is Touch or 5 feet -- caster must be adjacent. */
+  let requiresMelee = $derived.by(() => {
+    const range = (selectedLibAction?.range ?? "").toLowerCase().trim();
+    return range === "touch" || range === "5 feet" || range === "5 ft";
+  });
+
+  /** Auto-suggested implicit move: first checked target whose zone differs from actor's. */
+  let suggestedImplicitMove = $derived.by((): ZonePosition | null => {
+    const actor = encounter.effectiveActor;
+    if (!actor?.zone) return null;
+    if (!requiresMelee) return null;
+    for (const id of checkedTargetIds) {
+      const c = encounter.getCombatant(id);
+      if (c?.zone && c.zone.id !== actor.zone.id) {
+        return { id: c.zone.id };
+      }
+    }
+    return null;
+  });
+
+  /** The move that will actually be logged on commit (override > suggestion, unless dismissed). */
+  let activeImplicitMove = $derived.by((): ZonePosition | null => {
+    if (implicitMoveDismissed) return null;
+    if (implicitMoveOverride) return implicitMoveOverride;
+    return suggestedImplicitMove;
+  });
+
+  let activeImplicitMoveLabel = $derived.by(() => {
+    const m = activeImplicitMove;
+    if (!m) return null;
+    const zoneName = encounter.zones.find((z) => z.id === m.id)?.name ?? m.id;
+    return m.preposition ? `${m.preposition} ${zoneName}` : zoneName;
+  });
+
   let targetLabel = $derived.by(() => {
     const checked = checkedTargetIds;
     const actorName = encounter.effectiveActor?.name ?? "?";
@@ -311,6 +353,9 @@
     selectedLibAction = action.libAction ?? null;
     selectedVerb = action.verb;
     actionNote = action.note ?? action.libAction?.note ?? null;
+    implicitMoveDismissed = false;
+    implicitMoveOverride = null;
+    showImplicitMoveDetails = false;
 
     // Show desc if available (from library action)
     if (action.libAction?.desc) {
@@ -523,6 +568,9 @@
     isSpell = false;
     diceHint = null;
     actionNote = null;
+    implicitMoveDismissed = false;
+    implicitMoveOverride = null;
+    showImplicitMoveDetails = false;
   }
 
   function handleViaFocus() {
@@ -578,6 +626,17 @@
     if (selectedTargets.length === 0) {
       if (preset === "attack") return;
       selectedTargets = [{ who: actor.id, outcome: "full" as const }];
+    }
+
+    // Log the implicit move BEFORE the action, so the timeline reads:
+    // "Wex moves from South of Bridge to On Bridge.  Wex cast Cure Wounds on Lizardman 1."
+    const moveTo = activeImplicitMove;
+    if (moveTo && actor.zone) {
+      const from = { ...actor.zone };
+      actor.zone = moveTo;
+      encounter.logInsert({
+        move: { by: actor.id, from, to: moveTo },
+      });
     }
 
     const isFailed = effects.some((e) => e.type === "failed");
@@ -938,6 +997,16 @@
     >{autoTagCount} tag{autoTagCount > 1 ? "s" : ""} &#9662;</button>
   {/if}
 
+  <!-- Implicit move tile (touch/5ft spell into a different zone) -->
+  {#if activeImplicitMove}
+    <button
+      class="dnd-implicit-move-pill"
+      class:active={showImplicitMoveDetails}
+      onclick={() => { showImplicitMoveDetails = !showImplicitMoveDetails; }}
+      title="Tap to edit or remove the implicit move"
+    >&#x21A6; {activeImplicitMoveLabel} {showImplicitMoveDetails ? "▾" : "▸"}</button>
+  {/if}
+
   <!-- Add effect button -->
   <div style="position: relative;">
     <button
@@ -974,6 +1043,60 @@
 
   <button class="dnd-bar-btn active" onclick={handleCommit}>Commit</button>
 </div>
+
+{#if showImplicitMoveDetails && activeImplicitMove}
+  <div class="dnd-implicit-move-details">
+    <div class="dnd-move-row">
+      <span class="dnd-effect-label">Move to:</span>
+      {#each encounter.zones as zone (zone.id)}
+        <button
+          class="dnd-bar-btn dnd-zone-btn"
+          class:selected={activeImplicitMove.id === zone.id}
+          onclick={() => { implicitMoveOverride = { id: zone.id, preposition: activeImplicitMove?.preposition }; }}
+        >{zone.name}</button>
+      {/each}
+    </div>
+    <div class="dnd-move-row">
+      <span class="dnd-effect-label">Position:</span>
+      {#each BUILTIN_PREPOSITIONS as prep}
+        <button
+          class="dnd-bar-btn dnd-prep-btn"
+          class:selected={activeImplicitMove.preposition === prep}
+          title={prep}
+          onclick={() => {
+            const same = activeImplicitMove?.preposition === prep;
+            implicitMoveOverride = {
+              id: activeImplicitMove!.id,
+              preposition: same ? undefined : prep,
+            };
+          }}
+        ><span class="dnd-prep-icon">{@html PREPOSITION_ICONS[prep]}</span></button>
+      {/each}
+      {#each encounter.prepositions as prep}
+        <button
+          class="dnd-bar-btn dnd-prep-btn"
+          class:selected={activeImplicitMove.preposition === prep}
+          title={prep}
+          onclick={() => {
+            const same = activeImplicitMove?.preposition === prep;
+            implicitMoveOverride = {
+              id: activeImplicitMove!.id,
+              preposition: same ? undefined : prep,
+            };
+          }}
+        >{prep}</button>
+      {/each}
+      <button
+        class="dnd-bar-btn"
+        style="margin-left: auto; border-color: var(--text-error); color: var(--text-error);"
+        onclick={() => {
+          implicitMoveDismissed = true;
+          showImplicitMoveDetails = false;
+        }}
+      >Remove move</button>
+    </div>
+  </div>
+{/if}
 
 {#if diceHint}
   <div class="dnd-dice-hint">Roll: {diceHint}</div>

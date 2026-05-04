@@ -5,6 +5,17 @@ function isSelfOnly(actorId: string, targets: string[]): boolean {
   return targets.length > 0 && targets.every((t) => t === actorId);
 }
 
+/** Format a zone position like "above Bridge" or "South of Bridge". */
+function formatZonePosition(
+  pos: { id: string; preposition?: string } | null | undefined,
+  encounter: EncounterState,
+): string | null {
+  if (!pos) return null;
+  const zone = encounter.zones.find((z) => z.id === pos.id);
+  const zoneName = zone?.name ?? pos.id;
+  return pos.preposition ? `${pos.preposition} ${zoneName}` : zoneName;
+}
+
 /** Produce a human-readable summary of a log entry. Returns null for structural entries. */
 export function summarizeLogEntry(entry: any, encounter: EncounterState): string | null {
   if (entry.attack) {
@@ -117,17 +128,18 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
   }
   if (entry.move) {
     const actorName = encounter.getCombatant(entry.move.by)?.name ?? entry.move.by;
-    const targetName = entry.move.target
-      ? encounter.getCombatant(entry.move.target)?.name ?? entry.move.target
-      : null;
-    if (entry.move.verb === "flees") {
-      return targetName
-        ? `${actorName} flees from ${targetName}.`
-        : `${actorName} flees from the encounter.`;
+    if (entry.move.fled) {
+      return `${actorName} flees the encounter.`;
     }
-    return targetName
-      ? `${actorName} ${entry.move.verb} ${targetName}.`
-      : `${actorName} ${entry.move.verb} the encounter.`;
+    const fromLabel = formatZonePosition(entry.move.from, encounter);
+    const toLabel = formatZonePosition(entry.move.to, encounter);
+    if (fromLabel && toLabel) {
+      return `${actorName} moves from ${fromLabel} to ${toLabel}.`;
+    }
+    if (toLabel) {
+      return `${actorName} moves to ${toLabel}.`;
+    }
+    return `${actorName} moves.`;
   }
   if (entry.note) {
     const actorName = encounter.getCombatant(entry.note.by)?.name ?? entry.note.by;

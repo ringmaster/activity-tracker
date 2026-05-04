@@ -4,6 +4,7 @@ import type {
   EncounterData,
   AuthoredEncounterData,
   Spell,
+  Zone,
 } from "../types/encounter";
 import type { LogEntry } from "../types/actions";
 import type { ActiveObligation } from "../types/obligations";
@@ -19,6 +20,13 @@ export class EncounterState {
 
   // Combatants
   combatants = $state<Combatant[]>([]);
+
+  // Zones (positional grouping for combatants)
+  zones = $state<Zone[]>([]);
+
+  // Custom prepositions added at runtime via the move bar's + button.
+  // The four built-in icons (above/beside/inside/under) are not stored here.
+  prepositions = $state<string[]>([]);
 
   // Action log
   log = $state<LogEntry[]>([]);
@@ -119,6 +127,8 @@ export class EncounterState {
     this.currentTurn = data.current_turn ?? null;
     this.log = data.log ?? [];
     this.activeObligations = data.active_obligations ?? [];
+    this.zones = data.zones ?? [];
+    this.prepositions = data.prepositions ?? [];
 
     // Expand combatants if they have `count` fields (authored format)
     if (data.combatants?.some((c: any) => c.count && c.count > 1)) {
@@ -129,6 +139,14 @@ export class EncounterState {
       this.combatants = (data.combatants ?? []).map((c) =>
         fillCombatantDefaults(c as Combatant),
       );
+    }
+
+    // Default any combatant without an explicit zone to the first zone, if any
+    const defaultZoneId = this.zones[0]?.id;
+    if (defaultZoneId) {
+      for (const c of this.combatants) {
+        if (!c.zone) c.zone = { id: defaultZoneId };
+      }
     }
   }
 
@@ -194,6 +212,8 @@ export class EncounterState {
       active: this.active,
       round: this.round,
       current_turn: this.currentTurn,
+      zones: this.zones.length > 0 ? this.zones : undefined,
+      prepositions: this.prepositions.length > 0 ? this.prepositions : undefined,
       combatants: this.combatants,
       log: this.log,
       active_obligations: this.activeObligations,
@@ -277,6 +297,7 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
   if (partial.recharge) base.recharge = partial.recharge;
   if (partial.hidden) base.hidden = partial.hidden;
   if (partial.friendly != null) base.friendly = partial.friendly;
+  if (partial.zone) base.zone = partial.zone;
 
   return base;
 }
