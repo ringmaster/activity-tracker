@@ -1,6 +1,8 @@
 import type { App, TFile } from "obsidian";
 import type {
   Combatant,
+  Counter,
+  AuthoredCounter,
   EncounterData,
   AuthoredEncounterData,
   Spell,
@@ -33,6 +35,9 @@ export class EncounterState {
 
   // Active obligations
   activeObligations = $state<ActiveObligation[]>([]);
+
+  // Counters (encounter-scoped accumulators with laddered thresholds)
+  counters = $state<Counter[]>([]);
 
   // Transient bar state (not persisted to YAML)
   swappedActor = $state<string | null>(null);
@@ -129,6 +134,7 @@ export class EncounterState {
     this.activeObligations = data.active_obligations ?? [];
     this.zones = data.zones ?? [];
     this.prepositions = data.prepositions ?? [];
+    this.counters = normalizeCounters(data.counters);
 
     // Expand combatants if they have `count` fields (authored format)
     if (data.combatants?.some((c: any) => c.count && c.count > 1)) {
@@ -153,6 +159,11 @@ export class EncounterState {
   /** Get a combatant by ID. */
   getCombatant(id: string): Combatant | undefined {
     return this.combatants.find((c) => c.id === id);
+  }
+
+  /** Get a counter by ID. */
+  getCounter(id: string): Counter | undefined {
+    return this.counters.find((c) => c.id === id);
   }
 
   /**
@@ -214,6 +225,7 @@ export class EncounterState {
       current_turn: this.currentTurn,
       zones: this.zones.length > 0 ? this.zones : undefined,
       prepositions: this.prepositions.length > 0 ? this.prepositions : undefined,
+      counters: this.counters.length > 0 ? this.counters : undefined,
       combatants: this.combatants,
       log: this.log,
       active_obligations: this.activeObligations,
@@ -246,6 +258,27 @@ export class EncounterState {
   destroy(): void {
     this.debouncedFlush.cancel();
   }
+}
+
+/** Fill defaults on authored counters: current defaults to 0; each ladder rung's
+ *  fired flag defaults to false. */
+function normalizeCounters(
+  counters: (Counter | AuthoredCounter)[] | undefined,
+): Counter[] {
+  if (!counters || counters.length === 0) return [];
+  return counters.map((c) => ({
+    id: c.id,
+    name: c.name,
+    note: c.note,
+    visible: c.visible ?? false,
+    current: c.current ?? 0,
+    ladder: (c.ladder ?? []).map((r) => ({
+      at: r.at,
+      banner: r.banner,
+      add_combatants: r.add_combatants,
+      fired: r.fired ?? false,
+    })),
+  }));
 }
 
 /** Normalize spell slots from authored format (plain number = max) to runtime format ({current, max}). */
@@ -298,6 +331,7 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
   if (partial.hidden) base.hidden = partial.hidden;
   if (partial.friendly != null) base.friendly = partial.friendly;
   if (partial.zone) base.zone = partial.zone;
+  if (partial.turn_hint) base.turn_hint = partial.turn_hint;
 
   return base;
 }

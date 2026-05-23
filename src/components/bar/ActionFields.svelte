@@ -3,6 +3,7 @@
   import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction, ZonePosition } from "../../types/encounter";
   import { renderSpellDescription } from "../../utils/spell-renderer";
   import { commitAttack, commitHeal, dropConcentration } from "../../state/action-logger.svelte";
+  import { tickCounter } from "../../state/counter-engine.svelte";
   import { generateSpellTag, generateConcentrationTag } from "../../data/spell-tag-generator";
   import { findLibraryAction, searchLibrary } from "../../state/library-loader";
   import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
@@ -10,7 +11,7 @@
   import AddTargetForm from "./AddTargetForm.svelte";
   import { PREPOSITION_ICONS, BUILTIN_PREPOSITIONS } from "../../icons/preposition-icons";
 
-  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "failed";
+  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "counter" | "failed";
 
   interface DamageEffect {
     type: "damage";
@@ -39,11 +40,16 @@
     type: "concentration";
   }
 
+  interface CounterEffect {
+    type: "counter";
+    counterId: string;
+  }
+
   interface FailedEffect {
     type: "failed";
   }
 
-  type SpellEffect = DamageEffect | ConditionEffect | HealEffect | TagEffect | ConcentrationEffect | FailedEffect;
+  type SpellEffect = DamageEffect | ConditionEffect | HealEffect | TagEffect | ConcentrationEffect | CounterEffect | FailedEffect;
 
   const COMMON_CONDITIONS = [
     "blinded", "charmed", "deafened", "frightened", "grappled",
@@ -123,6 +129,10 @@
     return initial;
   }
   let targets = $state<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>(buildInitialTargets());
+
+  // Counter ids to tick when this action commits, captured from the selected
+  // action's `effects: [{type: "counter", counter: <id>}]` entries.
+  let pendingCounterTicks = $state<string[]>([]);
 
   let autoTagCount = $derived(
     effects.filter((_, idx) => autoTagIndices.has(idx) && effects[idx]?.type === "tag").length,
@@ -427,9 +437,16 @@
       }
     }
 
+    // Reset and re-capture counter ticks for the newly-selected action.
+    pendingCounterTicks = [];
+
     // --- Auto-populate structured effects from action definition ---
     if (action.actionEffects && action.actionEffects.length > 0) {
       for (const ae of action.actionEffects) {
+        if (ae.type === "counter" && ae.counter) {
+          pendingCounterTicks = [...pendingCounterTicks, ae.counter];
+          continue;
+        }
         if (ae.type === "tag" && !effects.some((e) => e.type === "tag" && (e as TagEffect).name === ae.name)) {
           const newIdx = effects.length;
           effects = [...effects, {
@@ -599,6 +616,12 @@
       if (!effects.some((e) => e.type === "concentration")) {
         effects = [...effects, { type: "concentration" }];
         isConc = true;
+      }
+    } else if (effectType === "counter") {
+      // Default to the first authored counter; user can swap via the chip dropdown
+      const firstCounterId = encounter.counters[0]?.id ?? "";
+      if (firstCounterId) {
+        effects = [...effects, { type: "counter", counterId: firstCounterId }];
       }
     } else if (effectType === "failed") {
       // Replace all existing effects with a single failed marker
@@ -849,6 +872,20 @@
       actor.tags.push(concTag);
     }
 
+    // Tick any counters this action contributes to: authored effects on the
+    // selected action (pendingCounterTicks) and any Counter chips the DM added
+    // via the "+" menu.
+    const counterIdsToTick: string[] = [
+      ...pendingCounterTicks,
+      ...effects
+        .filter((e): e is CounterEffect => e.type === "counter")
+        .map((e) => e.counterId)
+        .filter((id) => id),
+    ];
+    for (const counterId of counterIdsToTick) {
+      tickCounter(encounter, counterId, 1, actor.id, via || undefined);
+    }
+
     encounter.lastTargetIds = selectedTargets.map((t) => t.who);
     encounter.flush();
     onDone();
@@ -974,6 +1011,23 @@
         <span class="dnd-effect-label">Conc</span>
         <button class="dnd-effect-remove" onclick={() => { removeEffect(idx); isConc = false; }}>&times;</button>
       </div>
+    {:else if effect.type === "counter"}
+      <div class="dnd-effect-widget dnd-counter-widget">
+        <span class="dnd-effect-label">+1</span>
+        <select
+          class="dnd-action-input"
+          value={(effect as CounterEffect).counterId}
+          onchange={(e) => {
+            const v = (e.target as HTMLSelectElement).value;
+            effects = effects.map((eff, i) => i === idx && eff.type === "counter" ? { ...eff, counterId: v } : eff);
+          }}
+        >
+          {#each encounter.counters as counter (counter.id)}
+            <option value={counter.id}>{counter.name}</option>
+          {/each}
+        </select>
+        <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
+      </div>
     {:else if effect.type === "failed"}
       <div class="dnd-effect-widget dnd-failed-widget">
         <span class="dnd-effect-label">{preset === "attack" ? "Miss" : "Failed"}</span>
@@ -1033,6 +1087,12 @@
           <span class="dnd-via-name">Concentration</span>
           <span class="dnd-via-detail">caster must concentrate</span>
         </button>
+        {#if encounter.counters.length > 0}
+          <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("counter")}>
+            <span class="dnd-via-name">Counter</span>
+            <span class="dnd-via-detail">tick an encounter counter (+1)</span>
+          </button>
+        {/if}
         <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("failed")}>
           <span class="dnd-via-name">{preset === "attack" ? "Miss" : "Failed"}</span>
           <span class="dnd-via-detail">action has no effect</span>

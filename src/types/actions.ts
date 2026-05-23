@@ -139,6 +139,16 @@ export interface MoveEntry {
   };
 }
 
+export interface CounterEntry {
+  counter: {
+    id: string;
+    delta: number;
+    by?: string;
+    via?: string;
+    at: string;
+  };
+}
+
 export type LogEntry =
   | StartCombatEntry
   | EndCombatEntry
@@ -156,4 +166,5 @@ export type LogEntry =
   | RemoveCombatantEntry
   | ConditionEntry
   | TagEntry
-  | MoveEntry;
+  | MoveEntry
+  | CounterEntry;

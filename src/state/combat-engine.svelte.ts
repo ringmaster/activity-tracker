@@ -325,6 +325,15 @@ export async function resetEncounter(state: EncounterState): Promise<void> {
   state.swappedActor = null;
   state.activeAction = null;
 
+  // Reset counters to current=0 and unfire all ladder rungs so the encounter
+  // can be replayed from a clean slate.
+  for (const counter of state.counters) {
+    counter.current = 0;
+    for (const rung of counter.ladder ?? []) {
+      rung.fired = false;
+    }
+  }
+
   // Keep NPCs and objects; remove PCs (they get re-added at encounter start).
   // Objects keep their authored tags (e.g. when_destroyed effects) and init,
   // since those are part of the encounter design rather than runtime state.

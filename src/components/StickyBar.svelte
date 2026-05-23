@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { EncounterState } from "../state/encounter-state.svelte";
-  import type { CombatTag } from "../types/encounter";
+  import type { CombatTag, Counter, LadderRung } from "../types/encounter";
   import { commitAttack, commitHeal, dropConcentration } from "../state/action-logger.svelte";
+  import { ackRung } from "../state/counter-engine.svelte";
   import { findLibraryAction } from "../state/library-loader";
   import { renderSpellDescription } from "../utils/spell-renderer";
   import { CONDITION_DESCRIPTIONS } from "../utils/condition-descriptions";
@@ -494,6 +495,12 @@
     return { combatantId: actor.id, combatantName: actor.name, conditions, tags };
   });
 
+  // Authored hint that surfaces under the bar on this combatant's turn.
+  let turnHint = $derived.by(() => {
+    if (!encounter.active || !encounter.currentTurn) return null;
+    return encounter.effectiveActor?.turn_hint ?? null;
+  });
+
   // Multiattack / reminder actions for the current actor
   let turnReminders = $derived.by(() => {
     if (!encounter.active || !encounter.currentTurn) return [];
@@ -522,6 +529,32 @@
 
   let isActionActive = $derived(encounter.activeAction !== null);
   let combatOver = $derived(encounter.allNPCsDead);
+
+  // Ladder rungs that have been crossed but not yet acknowledged.
+  interface CounterBanner {
+    counter: Counter;
+    rung: LadderRung;
+    rungIndex: number;
+  }
+
+  let counterBanners = $derived.by((): CounterBanner[] => {
+    if (!encounter.active) return [];
+    const banners: CounterBanner[] = [];
+    for (const counter of encounter.counters) {
+      const ladder = counter.ladder ?? [];
+      for (let i = 0; i < ladder.length; i++) {
+        const rung = ladder[i];
+        if (counter.current >= rung.at && !rung.fired) {
+          banners.push({ counter, rung, rungIndex: i });
+        }
+      }
+    }
+    return banners;
+  });
+
+  function ackCounterRung(counterId: string, rungIndex: number) {
+    ackRung(encounter, counterId, rungIndex);
+  }
 </script>
 
 {#if combatOver}
@@ -532,6 +565,12 @@
   <ActionBar {encounter} />
 {:else}
   <DefaultBar {encounter} />
+{/if}
+
+{#if turnHint && !isActionActive}
+  <div class="dnd-turn-hint-bar">
+    <div class="dnd-turn-hint">{turnHint}</div>
+  </div>
 {/if}
 
 {#if turnReminders.length > 0 && !isActionActive}
@@ -673,6 +712,30 @@
         {#if isDescExpanded && srdSpellName}
           <div class="dnd-spell-desc dnd-banner-spell-desc" use:renderSpellDesc={srdSpellName}></div>
         {/if}
+      </div>
+    {/each}
+  </div>
+{/if}
+
+{#if counterBanners.length > 0}
+  <div class="dnd-banner-stack">
+    {#each counterBanners as cb (`${cb.counter.id}:${cb.rungIndex}`)}
+      <div class="dnd-obligation-banner dnd-counter-banner">
+        <div class="dnd-banner-title">
+          &#9888; {cb.counter.name} reached {cb.rung.at}
+        </div>
+        <div class="dnd-banner-detail">{cb.rung.banner}</div>
+        {#if cb.rung.add_combatants && cb.rung.add_combatants.length > 0}
+          <div class="dnd-banner-detail dnd-counter-spawn-hint">
+            Adds: {cb.rung.add_combatants.map((c) => c.name).join(", ")}
+          </div>
+        {/if}
+        <div class="dnd-banner-actions">
+          <button
+            class="dnd-banner-btn pass"
+            onclick={() => ackCounterRung(cb.counter.id, cb.rungIndex)}
+          >Acknowledge</button>
+        </div>
       </div>
     {/each}
   </div>

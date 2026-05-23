@@ -157,6 +157,20 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     }
     return `${effectName} ended on ${targetName}.`;
   }
+  if (entry.counter) {
+    const counter = encounter.counters.find((c) => c.id === entry.counter.id);
+    const counterName = counter?.name ?? entry.counter.id;
+    const delta = entry.counter.delta;
+    const sign = delta > 0 ? "+" : "";
+    if (entry.counter.by) {
+      const actorName = encounter.getCombatant(entry.counter.by)?.name ?? entry.counter.by;
+      const via = entry.counter.via;
+      return via
+        ? `${actorName}'s ${via} ticks ${counterName} (${sign}${delta}).`
+        : `${actorName} ticks ${counterName} (${sign}${delta}).`;
+    }
+    return `${counterName} ticks (${sign}${delta}).`;
+  }
   if (entry.start_round) {
     return `--- Round ${entry.start_round.n} ---`;
   }

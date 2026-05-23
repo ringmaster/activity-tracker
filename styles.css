@@ -239,6 +239,21 @@
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
+.dnd-turn-hint-bar {
+  max-width: 768px;
+  width: 100%;
+  padding: 4px 10px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dnd-turn-hint {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #7eb8da;
+  font-style: italic;
+}
+
 .dnd-turn-reminder {
   font-size: 13px;
   line-height: 1.4;
@@ -252,6 +267,94 @@
 
 .dnd-turn-reminder strong {
   color: #ffffff;
+}
+
+/* ---------- Counter chip (DM-facing, in the actor dropdown) ---------- */
+.dnd-counter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 32px;
+}
+
+.dnd-counter-chip:active {
+  background: var(--background-modifier-hover);
+}
+
+.dnd-counter-name {
+  font-weight: 600;
+}
+
+.dnd-counter-value {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dnd-counter-plus {
+  color: var(--text-accent);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+/* ---------- Counter effect widget (in the action bar) ---------- */
+.dnd-counter-widget {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dnd-counter-widget .dnd-effect-label {
+  color: var(--text-accent);
+  font-weight: 700;
+}
+
+/* ---------- Counter banner (fired-but-unacked rung) ---------- */
+.dnd-counter-banner {
+  border-left: 3px solid var(--text-accent);
+}
+
+.dnd-counter-spawn-hint {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+/* ---------- Counters in the inline view (player-visible only) ---------- */
+.dnd-inline-counters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 0;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dnd-inline-counter {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.dnd-inline-counter-name {
+  font-weight: 600;
+}
+
+.dnd-inline-counter-value {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dnd-inline-counter-note {
+  color: var(--text-faint);
+  font-size: 12px;
 }
 
 /* ---------- Actor effects strip ---------- */
