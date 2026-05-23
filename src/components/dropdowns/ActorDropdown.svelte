@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import type { Combatant } from "../../types/encounter";
-  import { addCombatant } from "../../state/combat-engine.svelte";
+  import { addCombatant, endEncounter } from "../../state/combat-engine.svelte";
 
   let { encounter, onClose }: {
     encounter: EncounterState;
@@ -13,8 +13,19 @@
   let newInit = $state("");
   let newHP = $state("");
   let newType = $state<"npc" | "pc">("npc");
+  let confirmEnd = $state(false);
 
   let actor = $derived(encounter.effectiveActor);
+
+  function handleEnd() {
+    if (!confirmEnd) {
+      confirmEnd = true;
+      return;
+    }
+    confirmEnd = false;
+    endEncounter(encounter);
+    onClose();
+  }
 
   function swapTo(id: string) {
     if (id === encounter.currentTurn) {
@@ -59,20 +70,31 @@
 <div class="dnd-dropdown">
   <!-- Current actor state -->
   {#if actor}
-    <div class="dnd-dropdown-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
-      <strong>{actor.name}</strong>
-      <div style="font-size: 13px; color: var(--text-muted);">
-        {#if actor.type === "npc" && actor.hp}
-          HP {actor.hp.current}/{actor.hp.max}
-        {:else if actor.type === "pc"}
-          Damage taken: {actor.damage_taken ?? 0}
-        {/if}
-        {#if actor.temp_hp > 0}
-          &middot; Temp HP: {actor.temp_hp}
-        {/if}
-        {#if actor.concentration}
-          &middot; Concentrating: {actor.concentration.spell}
-        {/if}
+    <div class="dnd-dropdown-row" style="flex-direction: column; align-items: stretch; gap: 4px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <strong>{actor.name}</strong>
+          <div style="font-size: 13px; color: var(--text-muted);">
+            {#if actor.type === "npc" && actor.hp}
+              HP {actor.hp.current}/{actor.hp.max}
+            {:else if actor.type === "pc"}
+              Damage taken: {actor.damage_taken ?? 0}
+            {/if}
+            {#if actor.temp_hp > 0}
+              &middot; Temp HP: {actor.temp_hp}
+            {/if}
+            {#if actor.concentration}
+              &middot; Concentrating: {actor.concentration.spell}
+            {/if}
+          </div>
+        </div>
+        <button
+          class="dnd-end-btn"
+          class:confirming={confirmEnd}
+          onclick={handleEnd}
+        >
+          {confirmEnd ? "Confirm?" : "End"}
+        </button>
       </div>
       {#if actor.conditions.length > 0 || actor.tags.length > 0}
         <div>

@@ -703,6 +703,30 @@
   font-weight: 400;
 }
 
+.dnd-end-btn {
+  flex-shrink: 0;
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 8px 20px;
+  border: 1px solid var(--color-green, #2ea043);
+  border-radius: 6px;
+  background: var(--color-green, #2ea043);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dnd-end-btn:active {
+  opacity: 0.85;
+}
+
+.dnd-end-btn.confirming {
+  background: var(--text-error);
+  border-color: var(--text-error);
+}
+
 /* ---------- Roster confirmation overlay ---------- */
 .dnd-roster-overlay {
   padding: 12px;
