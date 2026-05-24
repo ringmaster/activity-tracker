@@ -460,6 +460,12 @@
   font-style: italic;
 }
 
+.dnd-inline-blocked {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* ---------- Obligation banners ---------- */
 .dnd-banner-stack {
   max-width: 768px;

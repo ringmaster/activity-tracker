@@ -67,7 +67,10 @@ class DebugLog {
 export default class ActivityTrackerPlugin extends Plugin {
   settings: ActivityTrackerSettings = DEFAULT_SETTINGS;
 
-  /** Active encounter states keyed by "filepath::sectionStart" */
+  /** Active encounter states keyed by "filepath::encounter-name". Stable
+   *  across writes that shift line numbers, unlike the prior lineStart-based
+   *  key, so that block-resize from one encounter doesn't orphan another's
+   *  state. */
   private encounterStates = new Map<string, EncounterState>();
 
   /** Mounted inline Svelte components keyed by element */
@@ -205,8 +208,6 @@ export default class ActivityTrackerPlugin extends Plugin {
       return;
     }
 
-    const key = `${ctx.sourcePath}::${sectionInfo.lineStart}`;
-
     let parsed: any;
     try {
       parsed = parseEncounterYaml(source);
@@ -230,6 +231,8 @@ export default class ActivityTrackerPlugin extends Plugin {
       return;
     }
 
+    const key = `${ctx.sourcePath}::${parsed.encounter}`;
+
     // Clean up old component FIRST to avoid reactive cascades
     // when loadFromData mutates state that the old component is subscribed to.
     const oldComponent = this.inlineComponents.get(el);
@@ -246,17 +249,26 @@ export default class ActivityTrackerPlugin extends Plugin {
     // Reload from parsed YAML so in-memory state stays in sync.
     let state = this.encounterStates.get(key);
     if (state) {
-      state.updateSectionBounds(sectionInfo.lineStart, sectionInfo.lineEnd);
       state.loadFromData(parsed);
     } else {
       state = new EncounterState(
         this.app,
         file,
-        sectionInfo.lineStart,
-        sectionInfo.lineEnd,
+        this.settings.codeBlockLanguage,
         parsed,
       );
       state.onDeactivate = () => this.hideBar();
+      // Wire the blocking-encounter callback so the inline view can disable
+      // Run/Continue when a sibling block in the same file is already active.
+      state.blockingEncounterName = () => {
+        const filePrefix = `${ctx.sourcePath}::`;
+        for (const [k, other] of this.encounterStates) {
+          if (other === state) continue;
+          if (!k.startsWith(filePrefix)) continue;
+          if (other.active) return other.encounter;
+        }
+        return null;
+      };
       state.partyNotePath = this.settings.partyNotePath;
       state.libraryPaths = this.settings.libraryPaths;
       this.encounterStates.set(key, state);

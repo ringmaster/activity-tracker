@@ -97,6 +97,11 @@ export class EncounterState {
   /** Called when the encounter deactivates so the plugin can hide the bar. */
   onDeactivate: (() => void) | null = null;
 
+  /** Plugin sets this so the inline view can disable Run/Continue when another
+   *  encounter in the same file is already active. Returns the name of the
+   *  blocking encounter, or null if none. */
+  blockingEncounterName: (() => string | null) | null = null;
+
   /** Path to the party note for persisting learned PC actions. */
   partyNotePath: string = "party.yaml";
   libraryPaths: string = "library.yaml, srd-library.yaml";
@@ -104,21 +109,18 @@ export class EncounterState {
   // File reference for YAML persistence
   app: App;
   private file: TFile;
-  private sectionStart: number;
-  private sectionEnd: number;
+  private language: string;
   private debouncedFlush: ReturnType<typeof createDebouncedFlush>;
 
   constructor(
     app: App,
     file: TFile,
-    sectionStart: number,
-    sectionEnd: number,
+    language: string,
     data: AuthoredEncounterData | EncounterData,
   ) {
     this.app = app;
     this.file = file;
-    this.sectionStart = sectionStart;
-    this.sectionEnd = sectionEnd;
+    this.language = language;
     this.debouncedFlush = createDebouncedFlush(app);
 
     this.loadFromData(data);
@@ -136,16 +138,14 @@ export class EncounterState {
     this.prepositions = data.prepositions ?? [];
     this.counters = normalizeCounters(data.counters);
 
-    // Expand combatants if they have `count` fields (authored format)
-    if (data.combatants?.some((c: any) => c.count && c.count > 1)) {
-      this.combatants = expandCombatants(data.combatants).map((c) =>
-        fillCombatantDefaults(c),
-      );
-    } else {
-      this.combatants = (data.combatants ?? []).map((c) =>
-        fillCombatantDefaults(c as Combatant),
-      );
-    }
+    // Always run through expandCombatants. It handles `count > 1` expansion
+    // AND auto-derives `id: toSlug(name)` for unique entries that omit an
+    // explicit id, so handwritten YAML like the Owlbear sample (no id, no
+    // count) still gets a stable, addressable id. Skipping this branch is
+    // what made the Owlbear target as undefined.
+    this.combatants = expandCombatants(data.combatants ?? []).map((c) =>
+      fillCombatantDefaults(c),
+    );
 
     // Default any combatant without an explicit zone to the first zone, if any
     const defaultZoneId = this.zones[0]?.id;
@@ -209,12 +209,6 @@ export class EncounterState {
     return undefined;
   }
 
-  /** Update section bounds (if code block processor re-runs). */
-  updateSectionBounds(start: number, end: number): void {
-    this.sectionStart = start;
-    this.sectionEnd = end;
-  }
-
   /** Serialize current state to EncounterData (for YAML output).
    *  Uses JSON round-trip to strip Svelte reactive proxies. */
   toData(): EncounterData {
@@ -232,12 +226,14 @@ export class EncounterState {
     }));
   }
 
-  /** Flush current state to the YAML code block (debounced). */
+  /** Flush current state to the YAML code block (debounced). The block is
+   *  located by re-scanning the file and matching the encounter name, so
+   *  sibling-block writes that shift line numbers don't corrupt the target. */
   flush(): void {
     this.debouncedFlush.schedule(
       this.file,
-      this.sectionStart,
-      this.sectionEnd,
+      this.language,
+      this.encounter,
       this.toData(),
     );
   }
@@ -248,8 +244,8 @@ export class EncounterState {
     await flushToFile(
       this.app,
       this.file,
-      this.sectionStart,
-      this.sectionEnd,
+      this.language,
+      this.encounter,
       this.toData(),
     );
   }

@@ -14,6 +14,13 @@
   let hasBeenStarted = $derived(encounter.round > 0 || encounter.log.length > 0);
   let confirmReset = $state(false);
   let showLog = $state(false);
+  /** Name of another encounter in the same file that is currently active, or
+   *  null if this encounter is free to start. Read at render time so the
+   *  derived recomputes whenever any state.active in the file flips. */
+  let blockedBy = $derived.by(() => {
+    encounter.active; // touch all siblings via the callback below
+    return encounter.blockingEncounterName?.() ?? null;
+  });
   let libraryLoadResults = $state<LibraryLoadResult[] | null>(null);
   let libraryLoadTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -32,6 +39,7 @@
   });
 
   function handleContinue() {
+    if (blockedBy) return; // Guarded; button should be disabled too
     // Remove the end_combat entry so the log is continuous when resumed
     const lastIdx = encounter.log.length - 1;
     if (lastIdx >= 0 && "end_combat" in encounter.log[lastIdx]) {
@@ -39,6 +47,11 @@
     }
     encounter.active = true;
     encounter.flushNow();
+  }
+
+  function handleRun() {
+    if (blockedBy) return;
+    onRunEncounter?.();
   }
 
   function handleReset() {
@@ -77,18 +90,33 @@
 
   {#if !readOnly}
     <div class="dnd-inline-actions">
-      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
         {#if hasBeenStarted}
-          <button class="dnd-encounter-btn" onclick={handleContinue}>
+          <button
+            class="dnd-encounter-btn"
+            onclick={handleContinue}
+            disabled={!!blockedBy}
+            title={blockedBy ? `Blocked by active encounter: ${blockedBy}` : ""}
+          >
             &#9654; Continue encounter
           </button>
           <button class="dnd-encounter-btn reset" onclick={handleReset}>
             {confirmReset ? "Confirm reset?" : "Reset encounter"}
           </button>
         {:else if onRunEncounter}
-          <button class="dnd-encounter-btn" onclick={onRunEncounter}>
+          <button
+            class="dnd-encounter-btn"
+            onclick={handleRun}
+            disabled={!!blockedBy}
+            title={blockedBy ? `Blocked by active encounter: ${blockedBy}` : ""}
+          >
             &#9654; Run encounter
           </button>
+        {/if}
+        {#if blockedBy}
+          <span class="dnd-inline-blocked">
+            Another encounter is active: <strong>{blockedBy}</strong>. Stop it first.
+          </span>
         {/if}
       </div>
 
