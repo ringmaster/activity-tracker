@@ -293,6 +293,17 @@ function normalizeSpellSlots(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+/** Backfill missing tag IDs so handwritten YAML (which often omits them) doesn't
+ *  blow up Svelte's keyed each blocks with undefined-vs-undefined collisions. */
+function ensureTagIds(tags: Combatant["tags"]): Combatant["tags"] {
+  let counter = 0;
+  return (tags ?? []).map((t) => {
+    if (t && t.id) return t;
+    counter++;
+    return { ...t, id: `tag-${Date.now()}-${counter}-${Math.random().toString(36).slice(2, 6)}` };
+  });
+}
+
 /** Fill in default values for combatant fields that may be absent in YAML. */
 function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name: string; type: "npc" | "pc" | "object" }): Combatant {
   const base: Combatant = {
@@ -302,7 +313,7 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
     init: partial.init ?? null,
     temp_hp: partial.temp_hp ?? 0,
     conditions: partial.conditions ?? [],
-    tags: partial.tags ?? [],
+    tags: ensureTagIds(partial.tags ?? []),
     concentration: partial.concentration ?? null,
   };
 

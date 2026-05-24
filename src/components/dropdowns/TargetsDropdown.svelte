@@ -50,13 +50,26 @@
     combatants: typeof encounter.combatants;
   }
 
+  /** Dedupe an array by a key, preserving first occurrence. */
+  function dedupeBy<T>(items: T[], keyFn: (item: T) => unknown): T[] {
+    const seen = new Set<unknown>();
+    const out: T[] = [];
+    for (const item of items) {
+      const key = keyFn(item);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
+    return out;
+  }
+
   /** Build groups in this order: actor's zone, other declared zones, then "Unzoned". */
   let groups = $derived.by((): ZoneGroup[] => {
-    const all = encounter.combatants ?? [];
+    const all = dedupeBy(encounter.combatants ?? [], (c) => c.id);
     const actorZoneId = actor?.zone?.id;
 
     // Walk zone definitions in author order; actor's zone first.
-    const orderedZones = [...encounter.zones];
+    const orderedZones = dedupeBy([...encounter.zones], (z) => z.id);
     if (actorZoneId) {
       const idx = orderedZones.findIndex((z) => z.id === actorZoneId);
       if (idx > 0) {
@@ -76,7 +89,7 @@
     }
 
     // Combatants without a zone (or pointing to a removed zone) -> "Unzoned"
-    const knownZoneIds = new Set(encounter.zones.map((z) => z.id));
+    const knownZoneIds = new Set(orderedZones.map((z) => z.id));
     const unzoned = all
       .filter((c) => !c.zone || !knownZoneIds.has(c.zone.id))
       .sort(alphaSort);
