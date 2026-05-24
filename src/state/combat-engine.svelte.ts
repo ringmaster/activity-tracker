@@ -1,6 +1,6 @@
 import type { EncounterState } from "./encounter-state.svelte";
 import type { Combatant, CombatAction, ActionEffect } from "../types/encounter";
-import type { PartyMember } from "../types/party";
+import type { PartyMember, Rider } from "../types/party";
 import { rollInitiative } from "../utils/dice";
 import { nowTimestamp } from "../utils/time";
 
@@ -20,6 +20,7 @@ export interface RosterEntry {
   hp?: { current: number; max: number };
   statblock?: string;
   actions?: CombatAction[];
+  riders?: Rider[];
 }
 
 /** Prepare the roster for the encounter start screen. */
@@ -77,6 +78,7 @@ export function prepareRoster(
         type: d.type,
       })),
     })),
+    riders: p.riders,
   }));
 
   return { npcs, pcs };
@@ -87,6 +89,19 @@ export interface PCToAdd {
   name: string;
   init: number;
   actions?: CombatAction[];
+  riders?: Rider[];
+}
+
+/** Initialize the rider_uses map from rider.uses caps. */
+function initRiderUses(riders: Rider[] | undefined): Record<string, { current: number; max: number }> | undefined {
+  if (!riders || riders.length === 0) return undefined;
+  const out: Record<string, { current: number; max: number }> = {};
+  for (const r of riders) {
+    if (r.uses?.count != null) {
+      out[r.name] = { current: r.uses.count, max: r.uses.count };
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** Start the encounter with the given roster and initiative values. */
@@ -109,6 +124,8 @@ export function startEncounter(
         tags: [],
         concentration: null,
         actions: pc.actions,
+        riders: pc.riders,
+        rider_uses: initRiderUses(pc.riders),
       });
     }
   }
@@ -253,6 +270,16 @@ export function nextTurn(state: EncounterState): void {
   for (const tag of actor.tags) {
     if (tag.uses && tag.resetOn === "turn") {
       tag.uses.current = tag.uses.max;
+    }
+  }
+
+  // Reset per-turn rider uses (Sneak Attack etc) at the start of the
+  // carrier's turn so they're available for this turn's commit.
+  if (actor.riders && actor.rider_uses) {
+    for (const r of actor.riders) {
+      if (r.uses?.per === "turn" && actor.rider_uses[r.name]) {
+        actor.rider_uses[r.name].current = actor.rider_uses[r.name].max;
+      }
     }
   }
 

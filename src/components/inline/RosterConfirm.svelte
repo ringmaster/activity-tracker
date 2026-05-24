@@ -47,7 +47,7 @@
       const val = parseInt(pcInits[pc.id] ?? "", 10);
       if (!isNaN(val)) {
         initMap.set(pc.id, val);
-        pcsToAdd.push({ id: pc.id, name: pc.name, init: val, actions: pc.actions });
+        pcsToAdd.push({ id: pc.id, name: pc.name, init: val, actions: pc.actions, riders: pc.riders });
       }
     }
 

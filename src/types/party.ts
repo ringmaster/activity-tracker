@@ -20,12 +20,67 @@ export interface PartyAction {
   effects?: ActionEffect[];
 }
 
+/** Conditions that must hold for a rider to appear on a selected action.
+ *  Empty / absent `when:` means the rider is always available for actions
+ *  the actor could perform. */
+export interface RiderWhen {
+  /** Only show this rider when the active preset is one of these
+   *  (e.g. "attack", "cast", "heal"). */
+  action_type?: string;
+}
+
+/** Limited-use rider; the count decrements when the rider commits and
+ *  resets at the next turn boundary or encounter, depending on `per`. */
+export interface RiderUses {
+  per: "turn" | "encounter";
+  count: number;
+}
+
+/** One piece of what a rider does when active. */
+export interface RiderEffect {
+  type: "damage" | "tag" | "condition";
+  /** Display name (used as the source label on damage components and as the
+   *  log via on tag/condition entries). Defaults to the rider's name. */
+  name?: string;
+  /** For damage: dice expression shown as a hint (e.g. "5d6"). */
+  dice?: string;
+  /** For damage: explicit damage type. Ignored when inherit_type is true. */
+  damageType?: string;
+  /** For damage: inherit the type from the riding action's first damage
+   *  component (so Sneak Attack on slashing weapons logs as slashing). */
+  inherit_type?: boolean;
+  /** For tag/condition: recipient relative to the actor. Defaults: tag=self,
+   *  condition=target. */
+  on?: "self" | "target" | "ally" | "enemy";
+  /** For tag: free-text reminder shown in the chip. */
+  note?: string;
+  /** For tag: optional trigger that fires the tag's banner later. */
+  trigger?: string;
+  /** When true on a tag/condition rider effect, an effect_ends entry is
+   *  emitted automatically AFTER the riding action commits (with
+   *  reason: action_consumed). Use for "consumed by the action it rode on"
+   *  abilities like Cunning Hide. */
+  consumed?: boolean;
+}
+
+export interface Rider {
+  name: string;
+  /** Optional gating; absent = always available. */
+  when?: RiderWhen;
+  /** Limited-use cap; absent = unlimited. */
+  uses?: RiderUses;
+  effects: RiderEffect[];
+}
+
 export interface PartyMember {
   id: string;
   name: string;
   player?: string;
   notes?: string;
   actions?: PartyAction[];
+  /** Rider abilities authored on the PC. Each commits as part of an action
+   *  via the bar's rider toggles. */
+  riders?: Rider[];
 }
 
 export interface PartyData {

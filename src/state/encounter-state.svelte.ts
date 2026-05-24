@@ -339,6 +339,8 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
   if (partial.friendly != null) base.friendly = partial.friendly;
   if (partial.zone) base.zone = partial.zone;
   if (partial.turn_hint) base.turn_hint = partial.turn_hint;
+  if (partial.riders) base.riders = partial.riders;
+  if (partial.rider_uses) base.rider_uses = partial.rider_uses;
 
   return base;
 }

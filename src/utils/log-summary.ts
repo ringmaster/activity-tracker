@@ -48,7 +48,11 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
       .map((t: any) => {
         const name = encounter.getCombatant(t.who)?.name ?? t.who;
         if (t.dmg && t.dmg.length > 0) {
-          const dmgParts = t.dmg.map((d: any) => `${d.n} ${d.type}`).join(" + ");
+          const dmgParts = t.dmg
+            .map((d: any) => d.source
+              ? `${d.n} ${d.type} (${d.source})`
+              : `${d.n} ${d.type}`)
+            .join(" + ");
           return `${name} dealing ${dmgParts}`;
         }
         return name;
@@ -154,6 +158,9 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     const targetName = encounter.getCombatant(entry.effect_ends.on)?.name ?? entry.effect_ends.on;
     if (entry.effect_ends.reason === "concentration_dropped") {
       return `${targetName} lost concentration on ${effectName}.`;
+    }
+    if (entry.effect_ends.reason === "action_consumed") {
+      return `${targetName} is no longer ${effectName}.`;
     }
     return `${effectName} ended on ${targetName}.`;
   }

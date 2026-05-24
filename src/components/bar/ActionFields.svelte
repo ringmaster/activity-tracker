@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction, ZonePosition } from "../../types/encounter";
+  import type { Rider } from "../../types/party";
   import { renderSpellDescription } from "../../utils/spell-renderer";
   import { commitAttack, commitHeal, dropConcentration } from "../../state/action-logger.svelte";
   import { tickCounter } from "../../state/counter-engine.svelte";
@@ -134,6 +135,62 @@
   let autoTagCount = $derived(
     effects.filter((_, idx) => autoTagIndices.has(idx) && effects[idx]?.type === "tag").length,
   );
+
+  // Rider toggles: which of the actor's authored riders are active for this
+  // commit. Keyed by rider name. Reset whenever the action selection changes.
+  let activeRiderNames = $state<Set<string>>(new Set());
+  // Damage-rider damage value entry, keyed by rider name. Each damage rider
+  // has at most one damage effect in its chip.
+  let riderDamageValues = $state<Record<string, number>>({});
+
+  /** Riders authored on the current actor, gated by `when:` against the
+   *  current preset. Depleted (uses.current === 0) riders are excluded so
+   *  they can't be re-toggled mid-turn. */
+  let availableRiders = $derived.by((): Rider[] => {
+    const actor = encounter.effectiveActor;
+    if (!actor?.riders) return [];
+    return actor.riders.filter((r) => {
+      if (r.when?.action_type && r.when.action_type !== preset) return false;
+      const uses = actor.rider_uses?.[r.name];
+      if (uses && uses.current <= 0) return false;
+      return true;
+    });
+  });
+
+  let activeRiders = $derived(
+    availableRiders.filter((r) => activeRiderNames.has(r.name)),
+  );
+
+  let inactiveRiders = $derived(
+    availableRiders.filter((r) => !activeRiderNames.has(r.name)),
+  );
+
+  /** The damage type a damage rider with `inherit_type: true` uses: the first
+   *  damage type of the currently-selected action. */
+  let inheritedDamageType = $derived.by(() => {
+    const dmgEffect = effects.find((e) => e.type === "damage") as DamageEffect | undefined;
+    return dmgEffect?.damageType ?? "";
+  });
+
+  function toggleRider(rider: Rider) {
+    const next = new Set(activeRiderNames);
+    if (next.has(rider.name)) {
+      next.delete(rider.name);
+    } else {
+      next.add(rider.name);
+      // Seed a damage value entry so the input renders empty (not "undefined").
+      if (rider.effects.some((e) => e.type === "damage")
+          && riderDamageValues[rider.name] == null) {
+        riderDamageValues[rider.name] = 0;
+      }
+    }
+    activeRiderNames = next;
+  }
+
+  function clearRiderState() {
+    activeRiderNames = new Set();
+    riderDamageValues = {};
+  }
 
   let cancelIcon = $derived(
     preset === "attack" ? "\u2694" : preset === "cast" ? "\u2728" : "\u2764",
@@ -363,6 +420,7 @@
     implicitMoveDismissed = false;
     implicitMoveOverride = null;
     showImplicitMoveDetails = false;
+    clearRiderState();
 
     // Show desc if available (from library action)
     if (action.libAction?.desc) {
@@ -668,6 +726,92 @@
       });
     }
 
+    // --- Rider SETUP phase ---
+    // Apply each active rider's tag/condition effects BEFORE the action commit,
+    // so the prose reads "Wex hides (Cunning Action). Wex attacks ...".
+    // Track applied tags so the CONSUMED phase below can emit effect_ends
+    // and pull them back off after the action.
+    type AppliedRiderTag = {
+      riderName: string;
+      tagName: string;
+      combatantId: string;
+      tagId: string;
+      consumed: boolean;
+    };
+    const appliedRiderTags: AppliedRiderTag[] = [];
+
+    for (const rider of activeRiders) {
+      for (const eff of rider.effects) {
+        if (eff.type === "tag") {
+          const tagName = eff.name ?? rider.name;
+          const on = eff.on ?? "self";
+          const recipients: string[] = [];
+          if (on === "self" || on === "ally") {
+            recipients.push(actor.id);
+          } else {
+            // target/enemy: apply to each selected target
+            for (const t of selectedTargets) recipients.push(t.who);
+          }
+          const ids: string[] = [];
+          for (const rid of recipients) {
+            const c = encounter.getCombatant(rid);
+            if (!c) continue;
+            const tagId = `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+            c.tags.push({
+              id: tagId,
+              name: tagName,
+              source: actor.id,
+              note: eff.note,
+              trigger: (eff.trigger || undefined) as any,
+              onTrigger: eff.note,
+              autoRemove: "manual",
+            });
+            ids.push(tagId);
+            appliedRiderTags.push({
+              riderName: rider.name,
+              tagName,
+              combatantId: rid,
+              tagId,
+              consumed: !!eff.consumed,
+            });
+          }
+          encounter.logInsert({
+            tag: {
+              by: actor.id,
+              tgt: recipients,
+              name: tagName,
+              note: eff.note,
+              via: rider.name,
+              ids,
+            },
+          });
+        } else if (eff.type === "condition") {
+          const condName = eff.name;
+          if (!condName) continue;
+          const on = eff.on ?? "target";
+          const recipients: string[] = [];
+          if (on === "self" || on === "ally") {
+            recipients.push(actor.id);
+          } else {
+            for (const t of selectedTargets) recipients.push(t.who);
+          }
+          for (const rid of recipients) {
+            const c = encounter.getCombatant(rid);
+            if (!c) continue;
+            if (!c.conditions.includes(condName)) c.conditions.push(condName);
+          }
+          encounter.logInsert({
+            condition: {
+              by: actor.id,
+              tgt: recipients,
+              conditions: [condName],
+              via: rider.name,
+            },
+          });
+        }
+      }
+    }
+
     const isFailed = effects.some((e) => e.type === "failed");
 
     // If failed, log the attempt with no effects applied
@@ -695,6 +839,19 @@
     const baseDmg: DamageComponent[] = damageEffects
       .filter((d) => d.amount > 0)
       .map((d) => ({ n: d.amount, type: d.damageType }));
+
+    // Bake rider damage contributions into baseDmg, source-labeled, so the
+    // attack log entry carries them and the prose reads
+    // "15 slashing + 7 slashing (Sneak Attack)".
+    for (const rider of activeRiders) {
+      for (const eff of rider.effects) {
+        if (eff.type !== "damage") continue;
+        const n = riderDamageValues[rider.name] ?? 0;
+        if (n <= 0) continue;
+        const dmgType = eff.inherit_type ? inheritedDamageType : (eff.damageType ?? "");
+        baseDmg.push({ n, type: dmgType, source: rider.name });
+      }
+    }
 
     // Apply healing effects
     const healEffects = effects.filter((e) => e.type === "heal") as HealEffect[];
@@ -906,6 +1063,33 @@
       tickCounter(encounter, counterId, 1, actor.id, via || undefined);
     }
 
+    // --- Rider CONSUMED phase ---
+    // For any rider setup tag that authored `consumed: true`, remove it from
+    // the recipient and emit an effect_ends entry AFTER the attack, so the
+    // prose closes with "Wex is no longer hidden."
+    for (const t of appliedRiderTags) {
+      if (!t.consumed) continue;
+      const c = encounter.getCombatant(t.combatantId);
+      if (c) {
+        c.tags = c.tags.filter((tag) => tag.id !== t.tagId);
+      }
+      encounter.logInsert({
+        effect_ends: {
+          what: t.tagName,
+          on: t.combatantId,
+          reason: "action_consumed",
+        },
+      });
+    }
+
+    // Decrement rider uses (one per active rider, not per effect).
+    if (actor.rider_uses) {
+      for (const rider of activeRiders) {
+        const u = actor.rider_uses[rider.name];
+        if (u && u.current > 0) u.current--;
+      }
+    }
+
     encounter.lastTargetIds = selectedTargets.map((t) => t.who);
     encounter.flush();
     onDone();
@@ -1081,6 +1265,46 @@
     >&#x21A6; {activeImplicitMoveLabel} {showImplicitMoveDetails ? "▾" : "▸"}</button>
   {/if}
 
+  <!-- Active rider chips (sit to the left of `+`) -->
+  {#each activeRiders as rider (rider.name)}
+    {@const hasDamage = rider.effects.some((e) => e.type === "damage")}
+    {@const dmgEffect = rider.effects.find((e) => e.type === "damage")}
+    {@const dmgType = dmgEffect?.inherit_type ? inheritedDamageType : (dmgEffect?.damageType ?? "")}
+    {#if hasDamage}
+      <button
+        class="dnd-rider-chip dnd-rider-active dnd-rider-damage"
+        onclick={() => toggleRider(rider)}
+        title="Tap to deactivate {rider.name}"
+      >
+        <span class="dnd-rider-name">{rider.name}</span>
+        {#if dmgEffect?.dice}
+          <span class="dnd-rider-dice">{dmgEffect.dice}</span>
+        {/if}
+        <input
+          type="number"
+          inputmode="numeric"
+          class="dnd-action-input narrow"
+          placeholder="dmg"
+          value={riderDamageValues[rider.name] || ""}
+          onclick={(e) => e.stopPropagation()}
+          oninput={(e) => { riderDamageValues[rider.name] = parseInt((e.target as HTMLInputElement).value, 10) || 0; }}
+        />
+        {#if dmgType}
+          <span class="dnd-rider-dmg-type">{dmgType}</span>
+        {/if}
+      </button>
+    {:else}
+      <button
+        class="dnd-rider-chip dnd-rider-active"
+        onclick={() => toggleRider(rider)}
+        title="Tap to deactivate {rider.name}"
+      >
+        <span class="dnd-rider-name">{rider.name}</span>
+        <span class="dnd-rider-check">&#10003;</span>
+      </button>
+    {/if}
+  {/each}
+
   <!-- Add effect button -->
   <div style="position: relative;">
     <button
@@ -1120,6 +1344,28 @@
       </div>
     {/if}
   </div>
+
+  <!-- Inactive rider chips (right of `+`, behind a visual separator) -->
+  {#if inactiveRiders.length > 0}
+    <span class="dnd-rider-separator" aria-hidden="true"></span>
+    {#each inactiveRiders as rider (rider.name)}
+      {@const uses = encounter.effectiveActor?.rider_uses?.[rider.name]}
+      <button
+        class="dnd-rider-chip dnd-rider-inactive"
+        onclick={() => toggleRider(rider)}
+        title="Tap to add {rider.name} to this action"
+      >
+        <span class="dnd-rider-q">?</span>
+        <span class="dnd-rider-name">{rider.name}</span>
+        {#if rider.effects.find((e) => e.type === "damage")?.dice as dice}
+          <span class="dnd-rider-dice">{dice}</span>
+        {/if}
+        {#if uses}
+          <span class="dnd-rider-uses">({uses.current}/{uses.max})</span>
+        {/if}
+      </button>
+    {/each}
+  {/if}
 
   <button class="dnd-bar-btn active" onclick={handleCommit}>Commit</button>
 </div>
