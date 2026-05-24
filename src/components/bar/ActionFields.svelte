@@ -1350,6 +1350,7 @@
     <span class="dnd-rider-separator" aria-hidden="true"></span>
     {#each inactiveRiders as rider (rider.name)}
       {@const uses = encounter.effectiveActor?.rider_uses?.[rider.name]}
+      {@const riderDice = rider.effects.find((e) => e.type === "damage")?.dice}
       <button
         class="dnd-rider-chip dnd-rider-inactive"
         onclick={() => toggleRider(rider)}
@@ -1357,8 +1358,8 @@
       >
         <span class="dnd-rider-q">?</span>
         <span class="dnd-rider-name">{rider.name}</span>
-        {#if rider.effects.find((e) => e.type === "damage")?.dice as dice}
-          <span class="dnd-rider-dice">{dice}</span>
+        {#if riderDice}
+          <span class="dnd-rider-dice">{riderDice}</span>
         {/if}
         {#if uses}
           <span class="dnd-rider-uses">({uses.current}/{uses.max})</span>
