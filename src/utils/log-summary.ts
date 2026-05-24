@@ -73,9 +73,19 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
       if (customVerb && !allNoDamage) return `${actorName} ${customVerb} ${entry.attack.via}.`;
       // Self-targeted spells: the cast itself is the action.
       if (isSpell) return `${actorName} cast ${entry.attack.via}.`;
-      // Self-targeted abilities with a verb (Hide -> "hides", Dodge ->
-      // "dodges"): the verb names the action, so the via is redundant.
-      if (customVerb) return `${actorName} ${customVerb}.`;
+      if (customVerb) {
+        // Distinguish verbs that ARE the action name's gerund (Hide -> "hides",
+        // Dodge -> "dodges"; drop the via) from generic verbs that describe a
+        // way of performing a separately-named action (Twilight Sanctuary
+        // verb "channels"; keep both). The verb-starts-with-name check
+        // identifies the gerund case.
+        const verbLower = customVerb.toLowerCase();
+        const nameLower = (entry.attack.via ?? "").toLowerCase();
+        if (nameLower && verbLower.startsWith(nameLower)) {
+          return `${actorName} ${customVerb}.`;
+        }
+        return `${actorName} ${customVerb} ${entry.attack.via}.`;
+      }
       return `${actorName} used ${entry.attack.via}.`;
     }
 
