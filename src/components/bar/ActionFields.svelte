@@ -12,7 +12,7 @@
   import AddTargetForm from "./AddTargetForm.svelte";
   import { PREPOSITION_ICONS, BUILTIN_PREPOSITIONS } from "../../icons/preposition-icons";
 
-  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "counter" | "failed";
+  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "counter" | "move" | "failed";
 
   interface DamageEffect {
     type: "damage";
@@ -687,6 +687,24 @@
       if (firstCounterId) {
         effects = [...effects, { type: "counter", counterId: firstCounterId }];
       }
+    } else if (effectType === "move") {
+      // Explicitly add a move chit. Reuses the implicit-move pill machinery:
+      // if no move is currently active, set an override to a sensible default
+      // (a zone other than the actor's current one if available) so the pill
+      // renders; if a move is already active, just open its details panel so
+      // the DM can edit it. Either way, opens the details so the DM lands on
+      // the zone picker.
+      if (!activeImplicitMove) {
+        implicitMoveDismissed = false;
+        const actor = encounter.effectiveActor;
+        const currentZoneId = actor?.zone?.id;
+        const defaultZone = encounter.zones.find((z) => z.id !== currentZoneId)
+          ?? encounter.zones[0];
+        if (defaultZone) {
+          implicitMoveOverride = { id: defaultZone.id };
+        }
+      }
+      showImplicitMoveDetails = true;
     } else if (effectType === "failed") {
       // Replace all existing effects with a single failed marker
       effects = [{ type: "failed" }];
@@ -1331,6 +1349,12 @@
           <span class="dnd-via-name">Concentration</span>
           <span class="dnd-via-detail">caster must concentrate</span>
         </button>
+        {#if encounter.zones.length > 0}
+          <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("move")}>
+            <span class="dnd-via-name">Move</span>
+            <span class="dnd-via-detail">move to a zone as part of this action</span>
+          </button>
+        {/if}
         {#if encounter.counters.length > 0}
           <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("counter")}>
             <span class="dnd-via-name">Counter</span>
