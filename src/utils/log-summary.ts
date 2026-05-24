@@ -122,13 +122,23 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     const actorId = entry.tag.by;
     const actorName = encounter.getCombatant(actorId)?.name ?? actorId;
     const tgtIds = entry.tag.tgt ?? [];
+    const via = entry.tag.via;
+    const viaSuffix = via ? ` (${via})` : "";
+    const noteSuffix = entry.tag.note ? ` (${entry.tag.note})` : "";
+    // Prefer the via attribution over the free-text note when both exist,
+    // since via names the action/rider that produced the tag and reads
+    // cleaner than a parenthetical reminder.
+    const suffix = via ? viaSuffix : noteSuffix;
+
     if (isSelfOnly(actorId, tgtIds)) {
-      return `${actorName} applies ${entry.tag.name}${entry.tag.note ? ` (${entry.tag.note})` : ""}.`;
+      // Setup entry that parallels effect_ends "X is no longer Y." Reads as
+      // "Wex is now hidden (Cunning Hide)." instead of "Wex tags Wex ..."
+      return `${actorName} is now ${entry.tag.name}${suffix}.`;
     }
     const targets = tgtIds
       .map((id: string) => encounter.getCombatant(id)?.name ?? id)
       .join(", ");
-    return `${actorName} tags ${targets} with ${entry.tag.name}${entry.tag.note ? ` (${entry.tag.note})` : ""}.`;
+    return `${actorName} applies ${entry.tag.name} to ${targets}${suffix}.`;
   }
   if (entry.move) {
     const actorName = encounter.getCombatant(entry.move.by)?.name ?? entry.move.by;
