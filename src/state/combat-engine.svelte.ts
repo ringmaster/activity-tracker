@@ -9,6 +9,7 @@ function isOutOfCombat(c: Combatant): boolean {
   return c.type === "object" || c.conditions.includes("dead") || c.conditions.includes("fled");
 }
 import { getCreature } from "./statblocks-api";
+import { rewindAll } from "./log-rewind.svelte";
 import type { App } from "obsidian";
 
 export interface RosterEntry {
@@ -312,9 +313,16 @@ export async function endEncounter(state: EncounterState): Promise<void> {
   state.onDeactivate?.();
 }
 
-/** Reset the encounter to a fresh state: restore NPC HP, remove PCs,
- *  clear conditions/concentration/obligations, reset round, clear log. */
+/** Reset the encounter to its authored starting state by rewinding the log
+ *  in reverse order. Every state mutation made during the encounter is
+ *  recorded in the log; replaying it backward returns the encounter to its
+ *  pre-start shape. PCs (added at start time) are removed; NPCs/objects
+ *  authored in the YAML remain. */
 export async function resetEncounter(state: EncounterState): Promise<void> {
+  // Rewind the log in reverse order. This handles damage restoration, tag
+  // removal, counter decrement, ack un-fire, spawn removal, etc.
+  rewindAll(state);
+
   state.active = false;
   state.round = 0;
   state.currentTurn = null;
@@ -325,8 +333,14 @@ export async function resetEncounter(state: EncounterState): Promise<void> {
   state.swappedActor = null;
   state.activeAction = null;
 
-  // Reset counters to current=0 and unfire all ladder rungs so the encounter
-  // can be replayed from a clean slate.
+  // PCs are added at encounter start; they should not survive a reset.
+  // NPCs and objects that survived rewind keep their (now authored) state.
+  state.combatants = state.combatants.filter(
+    (c) => c.type === "npc" || c.type === "object",
+  );
+
+  // Belt-and-suspenders: rewind handles each ack_rung and counter entry, but
+  // an encounter that was never run still has fresh counters to ensure.
   for (const counter of state.counters) {
     counter.current = 0;
     for (const rung of counter.ladder ?? []) {
@@ -334,28 +348,23 @@ export async function resetEncounter(state: EncounterState): Promise<void> {
     }
   }
 
-  // Keep NPCs and objects; remove PCs (they get re-added at encounter start).
-  // Objects keep their authored tags (e.g. when_destroyed effects) and init,
-  // since those are part of the encounter design rather than runtime state.
-  state.combatants = state.combatants
-    .filter((c) => c.type === "npc" || c.type === "object")
-    .map((c) => ({
-      ...c,
-      init: c.type === "object" ? c.init : null,
-      hp: c.hp ? { current: c.hp.max, max: c.hp.max } : undefined,
-      temp_hp: 0,
-      conditions: [],
-      tags: c.type === "object" ? c.tags : [],
-      concentration: null,
-      legendary_actions: c.legendary_actions
-        ? { max: c.legendary_actions.max, current: c.legendary_actions.max }
-        : null,
-      spell_slots: c.spell_slots
-        ? Object.fromEntries(
-            Object.entries(c.spell_slots).map(([k, v]) => [k, { current: v.max, max: v.max }]),
-          )
-        : undefined,
-    }));
+  // Restore any cleared transient PC state on NPCs that rewind couldn't undo
+  // (e.g. PCs that were removed already have nothing to clear here).
+  for (const c of state.combatants) {
+    c.temp_hp = 0;
+    c.conditions = [];
+    c.concentration = null;
+    if (c.type !== "object") c.tags = [];
+    if (c.legendary_actions) {
+      c.legendary_actions.current = c.legendary_actions.max;
+    }
+    if (c.spell_slots) {
+      for (const slot of Object.values(c.spell_slots)) slot.current = slot.max;
+    }
+    if (c.hp && (c.type === "npc" || c.type === "object")) {
+      c.hp.current = c.hp.max;
+    }
+  }
 
   await state.flushNow();
   state.onDeactivate?.();

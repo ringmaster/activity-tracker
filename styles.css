@@ -453,6 +453,13 @@
   opacity: 1;
 }
 
+.dnd-turn-log-cascade {
+  font-size: 11px;
+  color: var(--text-error);
+  padding: 2px 0 4px 14px;
+  font-style: italic;
+}
+
 /* ---------- Obligation banners ---------- */
 .dnd-banner-stack {
   max-width: 768px;

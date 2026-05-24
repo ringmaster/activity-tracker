@@ -3,6 +3,7 @@
   import type { CombatTag, Counter, LadderRung } from "../types/encounter";
   import { commitAttack, commitHeal, dropConcentration } from "../state/action-logger.svelte";
   import { ackRung } from "../state/counter-engine.svelte";
+  import { findDownstream, entryKindLabel, deleteEntryWithCascade } from "../state/log-rewind.svelte";
   import { findLibraryAction } from "../state/library-loader";
   import { renderSpellDescription } from "../utils/spell-renderer";
   import { CONDITION_DESCRIPTIONS } from "../utils/condition-descriptions";
@@ -172,6 +173,9 @@
 
 
   let confirmDeleteIdx = $state<number | null>(null);
+  /** Downstream entries that will cascade-undo if confirmDeleteIdx is committed.
+   *  Populated when entering confirm state; empty array means no cascade. */
+  let confirmDeleteCascade = $state<number[]>([]);
   let expandedCondition = $state<string | null>(null);
 
   function passConcentration(banner: TagBanner) {
@@ -310,112 +314,29 @@
 
   function requestDelete(logIndex: number) {
     if (confirmDeleteIdx === logIndex) {
-      revertAndDelete(logIndex);
+      // Second tap on the same row: commit the (possibly cascading) delete.
+      deleteEntryWithCascade(encounter, logIndex);
       confirmDeleteIdx = null;
+      confirmDeleteCascade = [];
     } else {
+      // First tap: enter confirm state. Compute downstream so the UI can warn
+      // only when there are consequences beyond this single entry.
       confirmDeleteIdx = logIndex;
+      confirmDeleteCascade = findDownstream(encounter.log, logIndex);
     }
   }
 
-  function revertAndDelete(logIndex: number) {
-    const entry = encounter.log[logIndex] as any;
-    if (!entry) return;
-
-    // Revert attack/spell damage
-    if (entry.attack) {
-      for (const t of entry.attack.tgt) {
-        if (t.dmg && t.dmg.length > 0) {
-          const total = t.dmg.reduce((s: number, d: any) => s + d.n, 0);
-          const combatant = encounter.getCombatant(t.who);
-          if (combatant) {
-            if (combatant.type === "npc" && combatant.hp) {
-              combatant.hp.current = Math.min(combatant.hp.current + total, combatant.hp.max);
-              // Remove dead condition if HP restored above 0
-              if (combatant.hp.current > 0) {
-                combatant.conditions = combatant.conditions.filter((c) => c !== "dead");
-                // Also remove the death log entry if it immediately follows
-                for (let j = logIndex + 1; j < encounter.log.length; j++) {
-                  const next = encounter.log[j] as any;
-                  if (next.death && next.death.who === t.who) {
-                    encounter.log.splice(j, 1);
-                    break;
-                  }
-                  if (next.start_turn) break;
-                }
-              }
-            } else if (combatant.type === "pc") {
-              combatant.damage_taken = Math.max(0, (combatant.damage_taken ?? 0) - total);
-            }
-          }
-        }
-      }
+  /** Summarize cascade impact like "3 entries: 2 attacks, 1 death". */
+  function cascadeSummary(indices: number[]): string {
+    if (indices.length === 0) return "";
+    const counts: Record<string, number> = {};
+    for (const i of indices) {
+      const kind = entryKindLabel(encounter.log[i] as any);
+      counts[kind] = (counts[kind] ?? 0) + 1;
     }
-
-    // Revert heal
-    if (entry.heal) {
-      for (const t of entry.heal.tgt) {
-        const combatant = encounter.getCombatant(t.who);
-        if (!combatant) continue;
-        if (combatant.type === "npc" && combatant.hp) {
-          combatant.hp.current = Math.max(0, combatant.hp.current - t.hp);
-        } else if (combatant.type === "pc") {
-          combatant.damage_taken = (combatant.damage_taken ?? 0) + t.hp;
-        }
-      }
-    }
-
-    // Revert condition application
-    if (entry.condition) {
-      for (const targetId of entry.condition.tgt) {
-        const combatant = encounter.getCombatant(targetId);
-        if (!combatant) continue;
-        for (const cond of entry.condition.conditions) {
-          combatant.conditions = combatant.conditions.filter((c) => c !== cond);
-        }
-      }
-    }
-
-    // Revert tag application
-    if (entry.tag) {
-      for (const targetId of entry.tag.tgt) {
-        const combatant = encounter.getCombatant(targetId);
-        if (!combatant) continue;
-        combatant.tags = combatant.tags.filter((t) => t.name !== entry.tag.name || t.source !== entry.tag.by);
-      }
-    }
-
-    // Revert effect_ends (re-add the condition/tag)
-    if (entry.effect_ends) {
-      const combatant = encounter.getCombatant(entry.effect_ends.on);
-      if (combatant && entry.effect_ends.reason === "dismissed") {
-        // We don't have enough info to fully restore a tag, but we can re-add a condition
-        if (!combatant.conditions.includes(entry.effect_ends.what)) {
-          combatant.conditions.push(entry.effect_ends.what);
-        }
-      }
-    }
-
-    // Revert move: restore the actor's prior zone, or undo a flee
-    if (entry.move) {
-      const combatant = encounter.getCombatant(entry.move.by);
-      if (combatant) {
-        if (entry.move.fled) {
-          combatant.conditions = combatant.conditions.filter((c) => c !== "fled");
-        } else {
-          combatant.zone = entry.move.from ?? undefined;
-        }
-      }
-    }
-
-    // Remove the log entry
-    encounter.log.splice(logIndex, 1);
-
-    // Adjust currentTurnLogIndex if it shifted
-    if (encounter.currentTurnLogIndex > logIndex) {
-      encounter.currentTurnLogIndex--;
-    }
-
-    encounter.flush();
+    const parts = Object.entries(counts)
+      .map(([k, n]) => (n > 1 ? `${n} ${k}s` : `${n} ${k}`));
+    return parts.join(", ");
   }
 
   function dismissTag(combatantId: string, tagId: string) {
@@ -555,6 +476,10 @@
   function ackCounterRung(counterId: string, rungIndex: number) {
     ackRung(encounter, counterId, rungIndex);
   }
+
+  function skipCounterRung(counterId: string, rungIndex: number) {
+    ackRung(encounter, counterId, rungIndex, { skipped: true });
+  }
 </script>
 
 {#if combatOver}
@@ -623,6 +548,13 @@
           >&times;</button>
         {/if}
       </div>
+      {#if confirmDeleteIdx === line.logIndex && confirmDeleteCascade.length > 0}
+        <div class="dnd-turn-log-cascade">
+          Will also undo {confirmDeleteCascade.length} later
+          {confirmDeleteCascade.length === 1 ? "entry" : "entries"}:
+          {cascadeSummary(confirmDeleteCascade)}.
+        </div>
+      {/if}
     {/each}
   </div>
 {/if}
@@ -735,6 +667,11 @@
             class="dnd-banner-btn pass"
             onclick={() => ackCounterRung(cb.counter.id, cb.rungIndex)}
           >Acknowledge</button>
+          <button
+            class="dnd-banner-btn dismiss"
+            title="Mark the threshold resolved without spawning combatants or logging the banner text."
+            onclick={() => skipCounterRung(cb.counter.id, cb.rungIndex)}
+          >Skip</button>
         </div>
       </div>
     {/each}

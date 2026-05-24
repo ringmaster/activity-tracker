@@ -171,6 +171,20 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     }
     return `${counterName} ticks (${sign}${delta}).`;
   }
+  if (entry.ack_rung) {
+    const counter = encounter.counters.find((c) => c.id === entry.ack_rung.counter);
+    const counterName = counter?.name ?? entry.ack_rung.counter;
+    const rung = counter?.ladder?.[entry.ack_rung.rungIndex];
+    if (entry.ack_rung.skipped) {
+      const at = rung?.at != null ? ` ${rung.at}` : "";
+      return `${counterName}${at} threshold dismissed.`;
+    }
+    const banner = (rung?.banner ?? "").trim();
+    const at = rung?.at != null ? ` ${rung.at}` : "";
+    return banner
+      ? `${counterName}${at}: ${banner}`
+      : `${counterName}${at} threshold reached.`;
+  }
   if (entry.start_round) {
     return `--- Round ${entry.start_round.n} ---`;
   }

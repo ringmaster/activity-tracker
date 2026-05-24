@@ -51,12 +51,17 @@ function reserveSpawnId(
   return `${desired}-${n}`;
 }
 
-/** Acknowledge a fired-but-unacked rung. Marks fired:true (latched) and spawns
- *  any add_combatants entries via the normal add-combatant flow. */
+/** Acknowledge a fired-but-unacked rung. Marks fired:true (latched). With
+ *  `skipped: true`, no consequences fire (no spawns, no banner text in the
+ *  log summary) but the ack is still recorded so the rung crossing remains
+ *  reconstructible. Without `skipped`, spawns add_combatants and the log
+ *  summary surfaces the banner prose for narrative reconstruction. The ack
+ *  is logged before the spawns so rewinding the ack cascades the spawns. */
 export function ackRung(
   state: EncounterState,
   counterId: string,
   rungIndex: number,
+  options: { skipped?: boolean } = {},
 ): void {
   const counter = state.getCounter(counterId);
   if (!counter?.ladder) return;
@@ -64,6 +69,20 @@ export function ackRung(
   if (!rung || rung.fired) return;
 
   rung.fired = true;
+
+  state.logInsert({
+    ack_rung: {
+      counter: counterId,
+      rungIndex,
+      at: nowTimestamp(),
+      ...(options.skipped ? { skipped: true } : {}),
+    },
+  });
+
+  if (options.skipped) {
+    state.flush();
+    return;
+  }
 
   for (const entry of rung.add_combatants ?? []) {
     const id = reserveSpawnId(state, entry.id, entry.name);

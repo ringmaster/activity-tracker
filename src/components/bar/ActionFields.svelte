@@ -130,9 +130,6 @@
   }
   let targets = $state<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>(buildInitialTargets());
 
-  // Counter ids to tick when this action commits, captured from the selected
-  // action's `effects: [{type: "counter", counter: <id>}]` entries.
-  let pendingCounterTicks = $state<string[]>([]);
 
   let autoTagCount = $derived(
     effects.filter((_, idx) => autoTagIndices.has(idx) && effects[idx]?.type === "tag").length,
@@ -397,7 +394,11 @@
       diceHint = null;
       if (preset !== "heal") setDamageEffects(action.spellDmg.map((d) => ({ dice: "", type: d.type })));
     } else {
+      // Selected action has no damage data; clear the default empty damage
+      // chit (added at component init for the "attack" preset) so abilities
+      // like Dissonant Hush don't show a useless 0 dmg slot.
       diceHint = null;
+      if (preset !== "heal") setDamageEffects([]);
     }
 
     // Prepend attack bonus to dice hint.
@@ -437,14 +438,19 @@
       }
     }
 
-    // Reset and re-capture counter ticks for the newly-selected action.
-    pendingCounterTicks = [];
+    // Drop any counter chips left over from a previously-selected action, so
+    // re-selecting doesn't accumulate stale ticks.
+    effects = effects.filter((e) => e.type !== "counter");
 
     // --- Auto-populate structured effects from action definition ---
     if (action.actionEffects && action.actionEffects.length > 0) {
       for (const ae of action.actionEffects) {
         if (ae.type === "counter" && ae.counter) {
-          pendingCounterTicks = [...pendingCounterTicks, ae.counter];
+          // Show authored counter ticks as visible chips so the DM doesn't
+          // double-add manually. Skip duplicates.
+          if (!effects.some((e) => e.type === "counter" && (e as CounterEffect).counterId === ae.counter)) {
+            effects = [...effects, { type: "counter", counterId: ae.counter }];
+          }
           continue;
         }
         if (ae.type === "tag" && !effects.some((e) => e.type === "tag" && (e as TagEffect).name === ae.name)) {
@@ -780,6 +786,12 @@
     const tagEffects = effects.filter((e) => e.type === "tag") as TagEffect[];
     // All tags from this commit share a castId for cascade cleanup
     const castId = `cast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    // Tag ids generated per tagEffect, in target order. Captured so the log
+    // entry below records them and the rewind path can dismiss precisely.
+    const tagIdsPerEffect = new Map<TagEffect, { tgt: string[]; ids: string[] }>();
+    function newTagId() {
+      return `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    }
     if (tagEffects.length > 0) {
       const affectedTargetIds = selectedTargets.map((t) => t.who);
       for (const tagEffect of tagEffects) {
@@ -795,8 +807,9 @@
           // Deferred effect on self/enemy/ally: tag goes on the ACTOR
           // with resolveTarget pointing to the selected target(s)
           const firstTarget = affectedTargetIds.find((id) => id !== actor.id) ?? affectedTargetIds[0];
+          const tagId = newTagId();
           actor.tags.push({
-            id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: tagId,
             name: tagEffect.name,
             source: actor.id,
             note: tagEffect.note || undefined,
@@ -812,10 +825,12 @@
             uses: tagUses,
             resetOn: tagResetOn,
           });
+          tagIdsPerEffect.set(tagEffect, { tgt: [actor.id], ids: [tagId] });
         } else if (effectOn === "self") {
           // Tag goes on the actor
+          const tagId = newTagId();
           actor.tags.push({
-            id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: tagId,
             name: tagEffect.name,
             source: actor.id,
             note: tagEffect.note || undefined,
@@ -826,13 +841,17 @@
             uses: tagUses,
             resetOn: tagResetOn,
           });
+          tagIdsPerEffect.set(tagEffect, { tgt: [actor.id], ids: [tagId] });
         } else {
           // Tag goes on each selected target
+          const tgtOrder: string[] = [];
+          const ids: string[] = [];
           for (const targetId of affectedTargetIds) {
             const combatant = encounter.getCombatant(targetId);
             if (!combatant) continue;
+            const tagId = newTagId();
             combatant.tags.push({
-              id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              id: tagId,
               name: tagEffect.name,
               source: actor.id,
               note: tagEffect.note || undefined,
@@ -843,23 +862,27 @@
               uses: tagUses,
               resetOn: tagResetOn,
             });
+            tgtOrder.push(targetId);
+            ids.push(tagId);
           }
+          tagIdsPerEffect.set(tagEffect, { tgt: tgtOrder, ids });
         }
       }
       // Log once per tag effect, but skip auto-populated tags from library
       for (let i = 0; i < tagEffects.length; i++) {
         const tagEffect = tagEffects[i];
         if (!tagEffect.name) continue;
-        // Find this tag's index in the full effects array
         const effectIdx = effects.indexOf(tagEffect as any);
-        if (effectIdx >= 0 && autoTagIndices.has(effectIdx)) continue; // auto tag, don't log
+        if (effectIdx >= 0 && autoTagIndices.has(effectIdx)) continue;
+        const captured = tagIdsPerEffect.get(tagEffect);
         encounter.logInsert({
           tag: {
             by: actor.id,
-            tgt: affectedTargetIds,
+            tgt: captured?.tgt ?? affectedTargetIds,
             name: tagEffect.name,
             note: tagEffect.note || undefined,
             via: via || undefined,
+            ids: captured?.ids,
           },
         });
       }
@@ -872,16 +895,13 @@
       actor.tags.push(concTag);
     }
 
-    // Tick any counters this action contributes to: authored effects on the
-    // selected action (pendingCounterTicks) and any Counter chips the DM added
-    // via the "+" menu.
-    const counterIdsToTick: string[] = [
-      ...pendingCounterTicks,
-      ...effects
-        .filter((e): e is CounterEffect => e.type === "counter")
-        .map((e) => e.counterId)
-        .filter((id) => id),
-    ];
+    // Tick any counters this action contributes to. Counter chips in `effects`
+    // cover both authored counter effects (auto-populated on selection) and
+    // ones the DM added via the "+" menu.
+    const counterIdsToTick = effects
+      .filter((e): e is CounterEffect => e.type === "counter")
+      .map((e) => e.counterId)
+      .filter((id) => id);
     for (const counterId of counterIdsToTick) {
       tickCounter(encounter, counterId, 1, actor.id, via || undefined);
     }
