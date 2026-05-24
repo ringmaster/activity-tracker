@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction, ZonePosition } from "../../types/encounter";
+  import type { Rider } from "../../types/party";
+  import { constrainToViewport } from "../../utils/constrain-to-viewport.svelte";
+  import { rollDiceExpression } from "../../utils/dice";
   import { renderSpellDescription } from "../../utils/spell-renderer";
   import { commitAttack, commitHeal, dropConcentration } from "../../state/action-logger.svelte";
   import { tickCounter } from "../../state/counter-engine.svelte";
@@ -11,12 +14,15 @@
   import AddTargetForm from "./AddTargetForm.svelte";
   import { PREPOSITION_ICONS, BUILTIN_PREPOSITIONS } from "../../icons/preposition-icons";
 
-  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "counter" | "failed";
+  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "counter" | "move" | "failed";
 
   interface DamageEffect {
     type: "damage";
     amount: number;
     damageType: string;
+    /** Authored dice expression for this component (e.g. "2d6+5"). Used by
+     *  the double-tap-to-roll affordance on the damage input. */
+    dice?: string;
   }
 
   interface ConditionEffect {
@@ -134,6 +140,62 @@
   let autoTagCount = $derived(
     effects.filter((_, idx) => autoTagIndices.has(idx) && effects[idx]?.type === "tag").length,
   );
+
+  // Rider toggles: which of the actor's authored riders are active for this
+  // commit. Keyed by rider name. Reset whenever the action selection changes.
+  let activeRiderNames = $state<Set<string>>(new Set());
+  // Damage-rider damage value entry, keyed by rider name. Each damage rider
+  // has at most one damage effect in its chip.
+  let riderDamageValues = $state<Record<string, number>>({});
+
+  /** Riders authored on the current actor, gated by `when:` against the
+   *  current preset. Depleted (uses.current === 0) riders are excluded so
+   *  they can't be re-toggled mid-turn. */
+  let availableRiders = $derived.by((): Rider[] => {
+    const actor = encounter.effectiveActor;
+    if (!actor?.riders) return [];
+    return actor.riders.filter((r) => {
+      if (r.when?.action_type && r.when.action_type !== preset) return false;
+      const uses = actor.rider_uses?.[r.name];
+      if (uses && uses.current <= 0) return false;
+      return true;
+    });
+  });
+
+  let activeRiders = $derived(
+    availableRiders.filter((r) => activeRiderNames.has(r.name)),
+  );
+
+  let inactiveRiders = $derived(
+    availableRiders.filter((r) => !activeRiderNames.has(r.name)),
+  );
+
+  /** The damage type a damage rider with `inherit_type: true` uses: the first
+   *  damage type of the currently-selected action. */
+  let inheritedDamageType = $derived.by(() => {
+    const dmgEffect = effects.find((e) => e.type === "damage") as DamageEffect | undefined;
+    return dmgEffect?.damageType ?? "";
+  });
+
+  function toggleRider(rider: Rider) {
+    const next = new Set(activeRiderNames);
+    if (next.has(rider.name)) {
+      next.delete(rider.name);
+    } else {
+      next.add(rider.name);
+      // Seed a damage value entry so the input renders empty (not "undefined").
+      if (rider.effects.some((e) => e.type === "damage")
+          && riderDamageValues[rider.name] == null) {
+        riderDamageValues[rider.name] = 0;
+      }
+    }
+    activeRiderNames = next;
+  }
+
+  function clearRiderState() {
+    activeRiderNames = new Set();
+    riderDamageValues = {};
+  }
 
   let cancelIcon = $derived(
     preset === "attack" ? "\u2694" : preset === "cast" ? "\u2728" : "\u2764",
@@ -363,6 +425,7 @@
     implicitMoveDismissed = false;
     implicitMoveOverride = null;
     showImplicitMoveDetails = false;
+    clearRiderState();
 
     // Show desc if available (from library action)
     if (action.libAction?.desc) {
@@ -527,6 +590,29 @@
 
   /** Replace existing damage effects with ones matching the selected action's damage types.
    *  Preserves amounts already entered by the user. */
+  /** Double-tap handler for damage/heal/rider inputs: if the input is empty
+   *  and `dice` is a valid expression, roll it and write the result into
+   *  the input, then select it so the DM can type the table-rolled value
+   *  to amend it. Setter writes the parsed number back to the bound state. */
+  function rollIntoEmptyInput(
+    e: MouseEvent,
+    dice: string | undefined,
+    currentValue: number,
+    setter: (n: number) => void,
+  ) {
+    if (currentValue !== 0) return; // Don't overwrite a typed value
+    if (!dice) return;
+    const result = rollDiceExpression(dice);
+    if (result == null) return;
+    setter(result);
+    // Select after the bound update has flushed so the new digits are highlighted.
+    const input = e.currentTarget as HTMLInputElement;
+    requestAnimationFrame(() => {
+      input.focus();
+      input.select();
+    });
+  }
+
   function setDamageEffects(dmgSource: { dice?: string; type: string }[]) {
     const existingDmg = effects.filter((e) => e.type === "damage") as DamageEffect[];
     const nonDamage = effects.filter((e) => e.type !== "damage");
@@ -535,6 +621,7 @@
       type: "damage",
       amount: existingDmg[i]?.amount ?? 0,
       damageType: d.type,
+      dice: d.dice,
     }));
     effects = [...newDmg, ...nonDamage];
   }
@@ -629,6 +716,24 @@
       if (firstCounterId) {
         effects = [...effects, { type: "counter", counterId: firstCounterId }];
       }
+    } else if (effectType === "move") {
+      // Explicitly add a move chit. Reuses the implicit-move pill machinery:
+      // if no move is currently active, set an override to a sensible default
+      // (a zone other than the actor's current one if available) so the pill
+      // renders; if a move is already active, just open its details panel so
+      // the DM can edit it. Either way, opens the details so the DM lands on
+      // the zone picker.
+      if (!activeImplicitMove) {
+        implicitMoveDismissed = false;
+        const actor = encounter.effectiveActor;
+        const currentZoneId = actor?.zone?.id;
+        const defaultZone = encounter.zones.find((z) => z.id !== currentZoneId)
+          ?? encounter.zones[0];
+        if (defaultZone) {
+          implicitMoveOverride = { id: defaultZone.id };
+        }
+      }
+      showImplicitMoveDetails = true;
     } else if (effectType === "failed") {
       // Replace all existing effects with a single failed marker
       effects = [{ type: "failed" }];
@@ -651,9 +756,22 @@
       .filter(([_, t]) => t.checked)
       .map(([id, t]) => ({ who: id, outcome: t.outcome }));
 
-    // If no targets selected: attacks require a target; casts/heals default to self
+    // If no targets selected: casts/heals default to self. Attacks normally
+    // require a target, EXCEPT library abilities like Hide, Dodge, Dash,
+    // Disengage that do no damage and apply only to the actor; for those,
+    // default to self instead of refusing to commit.
     if (selectedTargets.length === 0) {
-      if (preset === "attack") return;
+      if (preset === "attack") {
+        const hasDamage = !!(
+          (selectedLibAction?.dmg && selectedLibAction.dmg.length > 0)
+          || selectedLibAction?.damageType
+        );
+        const libEffects = selectedLibAction?.effects ?? [];
+        const hasNonSelfEffect = libEffects.some((e) =>
+          e.on === "target" || e.on === "enemy" || e.on === "ally"
+        );
+        if (hasDamage || hasNonSelfEffect) return;
+      }
       selectedTargets = [{ who: actor.id, outcome: "full" as const }];
     }
 
@@ -666,6 +784,92 @@
       encounter.logInsert({
         move: { by: actor.id, from, to: moveTo },
       });
+    }
+
+    // --- Rider SETUP phase ---
+    // Apply each active rider's tag/condition effects BEFORE the action commit,
+    // so the prose reads "Wex hides (Cunning Action). Wex attacks ...".
+    // Track applied tags so the CONSUMED phase below can emit effect_ends
+    // and pull them back off after the action.
+    type AppliedRiderTag = {
+      riderName: string;
+      tagName: string;
+      combatantId: string;
+      tagId: string;
+      consumed: boolean;
+    };
+    const appliedRiderTags: AppliedRiderTag[] = [];
+
+    for (const rider of activeRiders) {
+      for (const eff of rider.effects) {
+        if (eff.type === "tag") {
+          const tagName = eff.name ?? rider.name;
+          const on = eff.on ?? "self";
+          const recipients: string[] = [];
+          if (on === "self" || on === "ally") {
+            recipients.push(actor.id);
+          } else {
+            // target/enemy: apply to each selected target
+            for (const t of selectedTargets) recipients.push(t.who);
+          }
+          const ids: string[] = [];
+          for (const rid of recipients) {
+            const c = encounter.getCombatant(rid);
+            if (!c) continue;
+            const tagId = `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+            c.tags.push({
+              id: tagId,
+              name: tagName,
+              source: actor.id,
+              note: eff.note,
+              trigger: (eff.trigger || undefined) as any,
+              onTrigger: eff.note,
+              autoRemove: "manual",
+            });
+            ids.push(tagId);
+            appliedRiderTags.push({
+              riderName: rider.name,
+              tagName,
+              combatantId: rid,
+              tagId,
+              consumed: !!eff.consumed,
+            });
+          }
+          encounter.logInsert({
+            tag: {
+              by: actor.id,
+              tgt: recipients,
+              name: tagName,
+              note: eff.note,
+              via: rider.name,
+              ids,
+            },
+          });
+        } else if (eff.type === "condition") {
+          const condName = eff.name;
+          if (!condName) continue;
+          const on = eff.on ?? "target";
+          const recipients: string[] = [];
+          if (on === "self" || on === "ally") {
+            recipients.push(actor.id);
+          } else {
+            for (const t of selectedTargets) recipients.push(t.who);
+          }
+          for (const rid of recipients) {
+            const c = encounter.getCombatant(rid);
+            if (!c) continue;
+            if (!c.conditions.includes(condName)) c.conditions.push(condName);
+          }
+          encounter.logInsert({
+            condition: {
+              by: actor.id,
+              tgt: recipients,
+              conditions: [condName],
+              via: rider.name,
+            },
+          });
+        }
+      }
     }
 
     const isFailed = effects.some((e) => e.type === "failed");
@@ -695,6 +899,19 @@
     const baseDmg: DamageComponent[] = damageEffects
       .filter((d) => d.amount > 0)
       .map((d) => ({ n: d.amount, type: d.damageType }));
+
+    // Bake rider damage contributions into baseDmg, source-labeled, so the
+    // attack log entry carries them and the prose reads
+    // "15 slashing + 7 slashing (Sneak Attack)".
+    for (const rider of activeRiders) {
+      for (const eff of rider.effects) {
+        if (eff.type !== "damage") continue;
+        const n = riderDamageValues[rider.name] ?? 0;
+        if (n <= 0) continue;
+        const dmgType = eff.inherit_type ? inheritedDamageType : (eff.damageType ?? "");
+        baseDmg.push({ n, type: dmgType, source: rider.name });
+      }
+    }
 
     // Apply healing effects
     const healEffects = effects.filter((e) => e.type === "heal") as HealEffect[];
@@ -906,6 +1123,33 @@
       tickCounter(encounter, counterId, 1, actor.id, via || undefined);
     }
 
+    // --- Rider CONSUMED phase ---
+    // For any rider setup tag that authored `consumed: true`, remove it from
+    // the recipient and emit an effect_ends entry AFTER the attack, so the
+    // prose closes with "Wex is no longer hidden."
+    for (const t of appliedRiderTags) {
+      if (!t.consumed) continue;
+      const c = encounter.getCombatant(t.combatantId);
+      if (c) {
+        c.tags = c.tags.filter((tag) => tag.id !== t.tagId);
+      }
+      encounter.logInsert({
+        effect_ends: {
+          what: t.tagName,
+          on: t.combatantId,
+          reason: "action_consumed",
+        },
+      });
+    }
+
+    // Decrement rider uses (one per active rider, not per effect).
+    if (actor.rider_uses) {
+      for (const rider of activeRiders) {
+        const u = actor.rider_uses[rider.name];
+        if (u && u.current > 0) u.current--;
+      }
+    }
+
     encounter.lastTargetIds = selectedTargets.map((t) => t.who);
     encounter.flush();
     onDone();
@@ -951,9 +1195,11 @@
           inputmode="numeric"
           class="dnd-action-input narrow dnd-effect-amount dnd-dmg-number"
           placeholder="dmg"
+          title={effect.dice ? `Double-tap to roll ${effect.dice}` : ""}
           value={effect.amount || ""}
           oninput={(e) => { effect.amount = parseInt((e.target as HTMLInputElement).value, 10) || 0; }}
           onkeydown={(e) => { if (e.key === "Enter") handleCommit(); }}
+          ondblclick={(e) => rollIntoEmptyInput(e, effect.dice, effect.amount, (n) => { effect.amount = n; })}
         />
         <DamageTypeIcon bind:value={effect.damageType} />
         {#if effects.length > 1 || preset === "cast"}
@@ -1081,6 +1327,48 @@
     >&#x21A6; {activeImplicitMoveLabel} {showImplicitMoveDetails ? "▾" : "▸"}</button>
   {/if}
 
+  <!-- Active rider chips (sit to the left of `+`) -->
+  {#each activeRiders as rider (rider.name)}
+    {@const hasDamage = rider.effects.some((e) => e.type === "damage")}
+    {@const dmgEffect = rider.effects.find((e) => e.type === "damage")}
+    {@const dmgType = dmgEffect?.inherit_type ? inheritedDamageType : (dmgEffect?.damageType ?? "")}
+    {#if hasDamage}
+      <button
+        class="dnd-rider-chip dnd-rider-active dnd-rider-damage"
+        onclick={() => toggleRider(rider)}
+        title="Tap to deactivate {rider.name}"
+      >
+        <span class="dnd-rider-name">{rider.name}</span>
+        {#if dmgEffect?.dice}
+          <span class="dnd-rider-dice">{dmgEffect.dice}</span>
+        {/if}
+        <input
+          type="number"
+          inputmode="numeric"
+          class="dnd-action-input narrow"
+          placeholder="dmg"
+          title={dmgEffect?.dice ? `Double-tap to roll ${dmgEffect.dice}` : ""}
+          value={riderDamageValues[rider.name] || ""}
+          onclick={(e) => e.stopPropagation()}
+          oninput={(e) => { riderDamageValues[rider.name] = parseInt((e.target as HTMLInputElement).value, 10) || 0; }}
+          ondblclick={(e) => { e.stopPropagation(); rollIntoEmptyInput(e, dmgEffect?.dice, riderDamageValues[rider.name] ?? 0, (n) => { riderDamageValues[rider.name] = n; }); }}
+        />
+        {#if dmgType}
+          <span class="dnd-rider-dmg-type">{dmgType}</span>
+        {/if}
+      </button>
+    {:else}
+      <button
+        class="dnd-rider-chip dnd-rider-active"
+        onclick={() => toggleRider(rider)}
+        title="Tap to deactivate {rider.name}"
+      >
+        <span class="dnd-rider-name">{rider.name}</span>
+        <span class="dnd-rider-check">&#10003;</span>
+      </button>
+    {/if}
+  {/each}
+
   <!-- Add effect button -->
   <div style="position: relative;">
     <button
@@ -1089,7 +1377,7 @@
       title="Add effect"
     >+</button>
     {#if showEffectPicker}
-      <div class="dnd-dropdown dnd-effect-picker">
+      <div class="dnd-dropdown dnd-effect-picker" use:constrainToViewport>
         <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("damage")}>
           <span class="dnd-via-name">Damage</span>
         </button>
@@ -1107,6 +1395,12 @@
           <span class="dnd-via-name">Concentration</span>
           <span class="dnd-via-detail">caster must concentrate</span>
         </button>
+        {#if encounter.zones.length > 0}
+          <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("move")}>
+            <span class="dnd-via-name">Move</span>
+            <span class="dnd-via-detail">move to a zone as part of this action</span>
+          </button>
+        {/if}
         {#if encounter.counters.length > 0}
           <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("counter")}>
             <span class="dnd-via-name">Counter</span>
@@ -1120,6 +1414,29 @@
       </div>
     {/if}
   </div>
+
+  <!-- Inactive rider chips (right of `+`, behind a visual separator) -->
+  {#if inactiveRiders.length > 0}
+    <span class="dnd-rider-separator" aria-hidden="true"></span>
+    {#each inactiveRiders as rider (rider.name)}
+      {@const uses = encounter.effectiveActor?.rider_uses?.[rider.name]}
+      {@const riderDice = rider.effects.find((e) => e.type === "damage")?.dice}
+      <button
+        class="dnd-rider-chip dnd-rider-inactive"
+        onclick={() => toggleRider(rider)}
+        title="Tap to add {rider.name} to this action"
+      >
+        <span class="dnd-rider-q">?</span>
+        <span class="dnd-rider-name">{rider.name}</span>
+        {#if riderDice}
+          <span class="dnd-rider-dice">{riderDice}</span>
+        {/if}
+        {#if uses}
+          <span class="dnd-rider-uses">({uses.current}/{uses.max})</span>
+        {/if}
+      </button>
+    {/each}
+  {/if}
 
   <button class="dnd-bar-btn active" onclick={handleCommit}>Commit</button>
 </div>
@@ -1243,7 +1560,7 @@
 {/if}
 
 {#if showViaSuggestions && combinedSuggestions.length > 0}
-  <div class="dnd-dropdown" style="max-height: 240px;">
+  <div class="dnd-dropdown" style="max-height: 240px;" use:constrainToViewport>
     {#each combinedSuggestions as action}
       <button
         class="dnd-dropdown-row dnd-via-suggestion"

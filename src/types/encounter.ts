@@ -1,9 +1,13 @@
 import type { LogEntry } from "./actions";
 import type { ActiveObligation } from "./obligations";
+import type { Rider } from "./party";
 
 export interface DamageComponent {
   n: number;
   type: string;
+  /** Optional label for the source of this damage component (e.g. "Sneak
+   *  Attack"). Surfaces in the prose log as "15 sl + 7 sl (Sneak Attack)". */
+  source?: string;
 }
 
 /** Damage as authored in YAML actions; `dice` is a display string like "2d6+2". */
@@ -179,6 +183,13 @@ export interface Combatant {
   friendly?: boolean;
   /** Authored coaching hint shown as blue text under the bar on this combatant's turn. */
   turn_hint?: string;
+  /** Rider abilities (Sneak Attack, Divine Smite, Cunning Hide, ...) that
+   *  surface as toggle chips in the action bar. */
+  riders?: Rider[];
+  /** Runtime use counters per rider name. Initialized from rider.uses on
+   *  encounter start; decremented on commit; reset at start of carrier's
+   *  turn when rider.uses.per === "turn". */
+  rider_uses?: Record<string, { current: number; max: number }>;
 }
 
 /** The authored shape before expansion; `count` triggers multi-combatant generation. */
@@ -205,6 +216,7 @@ export interface AuthoredCombatant {
   behavior?: Behavior;
   friendly?: boolean;
   turn_hint?: string;
+  riders?: Rider[];
 }
 
 

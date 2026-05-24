@@ -48,7 +48,11 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
       .map((t: any) => {
         const name = encounter.getCombatant(t.who)?.name ?? t.who;
         if (t.dmg && t.dmg.length > 0) {
-          const dmgParts = t.dmg.map((d: any) => `${d.n} ${d.type}`).join(" + ");
+          const dmgParts = t.dmg
+            .map((d: any) => d.source
+              ? `${d.n} ${d.type} (${d.source})`
+              : `${d.n} ${d.type}`)
+            .join(" + ");
           return `${name} dealing ${dmgParts}`;
         }
         return name;
@@ -65,10 +69,23 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
 
     // Self-targeted: drop "on [self]"
     if (selfOnly) {
-      // For self-only spells with no damage, use "cast" regardless of custom verb
-      // (the verb is for the resolve/attack phase, not the initial cast)
+      // Self-targeted with damage and a custom verb (rare): keep both.
       if (customVerb && !allNoDamage) return `${actorName} ${customVerb} ${entry.attack.via}.`;
-      if (isSpell || customVerb) return `${actorName} cast ${entry.attack.via}.`;
+      // Self-targeted spells: the cast itself is the action.
+      if (isSpell) return `${actorName} cast ${entry.attack.via}.`;
+      if (customVerb) {
+        // Distinguish verbs that ARE the action name's gerund (Hide -> "hides",
+        // Dodge -> "dodges"; drop the via) from generic verbs that describe a
+        // way of performing a separately-named action (Twilight Sanctuary
+        // verb "channels"; keep both). The verb-starts-with-name check
+        // identifies the gerund case.
+        const verbLower = customVerb.toLowerCase();
+        const nameLower = (entry.attack.via ?? "").toLowerCase();
+        if (nameLower && verbLower.startsWith(nameLower)) {
+          return `${actorName} ${customVerb}.`;
+        }
+        return `${actorName} ${customVerb} ${entry.attack.via}.`;
+      }
       return `${actorName} used ${entry.attack.via}.`;
     }
 
@@ -118,13 +135,23 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     const actorId = entry.tag.by;
     const actorName = encounter.getCombatant(actorId)?.name ?? actorId;
     const tgtIds = entry.tag.tgt ?? [];
+    const via = entry.tag.via;
+    const viaSuffix = via ? ` (${via})` : "";
+    const noteSuffix = entry.tag.note ? ` (${entry.tag.note})` : "";
+    // Prefer the via attribution over the free-text note when both exist,
+    // since via names the action/rider that produced the tag and reads
+    // cleaner than a parenthetical reminder.
+    const suffix = via ? viaSuffix : noteSuffix;
+
     if (isSelfOnly(actorId, tgtIds)) {
-      return `${actorName} applies ${entry.tag.name}${entry.tag.note ? ` (${entry.tag.note})` : ""}.`;
+      // Setup entry that parallels effect_ends "X is no longer Y." Reads as
+      // "Wex is now hidden (Cunning Hide)." instead of "Wex tags Wex ..."
+      return `${actorName} is now ${entry.tag.name}${suffix}.`;
     }
     const targets = tgtIds
       .map((id: string) => encounter.getCombatant(id)?.name ?? id)
       .join(", ");
-    return `${actorName} tags ${targets} with ${entry.tag.name}${entry.tag.note ? ` (${entry.tag.note})` : ""}.`;
+    return `${actorName} applies ${entry.tag.name} to ${targets}${suffix}.`;
   }
   if (entry.move) {
     const actorName = encounter.getCombatant(entry.move.by)?.name ?? entry.move.by;
@@ -154,6 +181,9 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     const targetName = encounter.getCombatant(entry.effect_ends.on)?.name ?? entry.effect_ends.on;
     if (entry.effect_ends.reason === "concentration_dropped") {
       return `${targetName} lost concentration on ${effectName}.`;
+    }
+    if (entry.effect_ends.reason === "action_consumed") {
+      return `${targetName} is no longer ${effectName}.`;
     }
     return `${effectName} ended on ${targetName}.`;
   }
