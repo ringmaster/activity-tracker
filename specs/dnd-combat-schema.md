@@ -54,6 +54,7 @@ tracker per note is supported.
 | `prepositions`       | `string[]`                    | runtime-extended    | Custom preposition labels added through the move bar's `+` button. Built-in prepositions (`above`, `beside`, `inside`, `under`) are **not** stored here. |
 | `log`                | `LogEntry[]`                  | tracker-managed     | See §1.7. Defaults to `[]`. |
 | `active_obligations` | `ActiveObligation[]`          | tracker-managed     | See §1.8. Defaults to `[]`. |
+| `counters`           | `Counter[]`                   | yes (optional)      | See §1.11. DM-tracked accumulators with laddered thresholds. |
 
 `zones` and `prepositions` are written back only when non-empty. The expanded,
 post-start YAML always contains the full set of fields above; the authored
@@ -116,6 +117,7 @@ expanded shape after `loadFromData`:
 | `recharge`           | `Record<string, boolean>`                              | NPC only. Map of ability name -> whether it's currently available. |
 | `hidden`             | boolean                                                | Deferred for v1; reserved. |
 | `friendly`           | boolean                                                | When set, an NPC is treated as a party ally; a PC marked `friendly: false` is treated as hostile. |
+| `turn_hint`          | string                                                 | Free-text recommendation shown as blue italic text under the action bar on this combatant's turn. Hidden while an action is in progress. |
 | `zone`               | `{id: string, preposition?: string}`                   | See §1.4. Combatants without a zone default to the first declared zone. |
 | `count`              | integer                                                | **Authored only.** Expands the entry into `count` copies; consumed at load time. See §1.1.5. |
 
@@ -319,7 +321,7 @@ effects:
 
 | Field             | Type                                                                            | Notes |
 |-------------------|---------------------------------------------------------------------------------|-------|
-| `type`            | `"tag" \| "condition" \| "concentration" \| "damage" \| "heal"`                | Required. `concentration` is the shorthand that applies a `Concentrating: <action name>` tag to self. |
+| `type`            | `"tag" \| "condition" \| "concentration" \| "damage" \| "heal" \| "counter"`   | Required. `concentration` is the shorthand that applies a `Concentrating: <action name>` tag to self. |
 | `name`            | string                                                                          | Name of the tag or condition. |
 | `on`              | `"target" \| "self" \| "enemy" \| "ally"`                                       | Recipient. Defaults vary by effect type. |
 | `trigger`         | `TagTrigger`                                                                    | When the resulting tag fires. Absent = passive/immediate. |
@@ -330,6 +332,7 @@ effects:
 | `active_at_start` | boolean                                                                         | If true, this effect is auto-applied as a tag on the host combatant when the encounter starts. Applies only to `type: tag`, `heal`, or `damage`. |
 | `uses`            | number                                                                          | Limited-use cap, copied to the resulting tag's `{current, max}`. |
 | `resetOn`         | `"turn"`                                                                        | Copied to the resulting tag. |
+| `counter`         | string                                                                          | Required when `type` is `"counter"`. The counter id to tick. Always ticks +1 per application. |
 
 ---
 
@@ -473,7 +476,7 @@ resolution in `ActionEffect`.
 written by the tracker. Each shape is a single-key object so YAML reads as a
 list of named events.
 
-The 17 supported entry shapes:
+The 18 supported entry shapes:
 
 | Key                | Payload |
 |--------------------|---------|
@@ -494,6 +497,7 @@ The 17 supported entry shapes:
 | `add_combatant`    | `{who, name, init, at}` |
 | `remove_combatant` | `{who, reason?, at}` |
 | `move`             | `{by, from?: ZonePosition \| null, to?: ZonePosition, fled?: boolean}` |
+| `counter`          | `{id: string, delta: number, by?: string, via?: string, at: string}` |
 
 `AttackTargetResult`: `{who: string, hit?: "full" | "half" | "zero", dmg?: DamageComponent[]}`.
 
@@ -508,6 +512,10 @@ resolves a previously-deferred tag rather than introducing a new action.
 `effect_ends.reason` values produced by the tracker include
 `concentration_dropped`, `source_concentration_lost`, `dismissed`, and
 `save_succeeded`.
+
+`counter` is generated when a counter ticks (either via an action effect or
+via a manual chip tap). `by` and `via` are present when the tick originated
+from an action commit.
 
 ---
 
@@ -581,6 +589,74 @@ concept everywhere**; do not introduce `damage` if `dmg` is used in the log.
 | `conc`| Concentration flag on a buff/debuff entry. |
 | `init`| Initiative roll. |
 | `dur` | Duration in rounds (reserved). |
+
+---
+
+### 1.11 Counters
+
+DM-tracked accumulators that tick when something specific happens. When a
+counter crosses a threshold (a ladder rung), a banner fires with consequence
+text and optional combatant spawns. Authored at the top of the encounter
+YAML; ticks come from `type: counter` action effects (§1.1.8) or manual taps
+in the action bar.
+
+```yaml
+counters:
+  - id: loud
+    name: Noise
+    note: Atmospheric tension; ticks when something loud happens.
+    visible: false
+    current: 0
+    ladder:
+      - at: 2
+        banner: The street goes quiet. Neighbors shutter their windows.
+      - at: 4
+        banner: Boots in the alley. A second guard crew arrives.
+        add_combatants:
+          - name: House Guard
+            type: npc
+            statblock: Guard
+            ac: 16
+            hp: { current: 11, max: 11 }
+            zone: { id: street }
+          - name: House Guard
+            type: npc
+            statblock: Guard
+            ac: 16
+            hp: { current: 11, max: 11 }
+            zone: { id: street }
+```
+
+`Counter` fields:
+
+| Field     | Type            | Notes |
+|-----------|-----------------|-------|
+| `id`      | string          | Required. Unique per encounter. Referenced by `ActionEffect.counter`. |
+| `name`    | string          | Required. Display name. |
+| `note`    | string          | Optional. DM-facing description of what the counter represents. |
+| `visible` | boolean         | Default `false`. When `false`, the counter is DM-only (chip in the action bar, not shown to players). When `true`, the counter also renders in the inline view. |
+| `current` | integer         | Tracker-managed. Starts at 0. Increments on tick. |
+| `ladder`  | `LadderRung[]`  | Optional. A counter with no ladder is a pure accumulator. |
+
+`LadderRung` fields:
+
+| Field            | Type                   | Notes |
+|------------------|------------------------|-------|
+| `at`             | integer                | Required. The counter value at or above which the rung fires. |
+| `banner`         | string                 | Required. Banner text shown to the DM when the rung fires. |
+| `add_combatants` | `AuthoredCombatant[]`  | Optional. When the rung is acknowledged, these are appended to the encounter via the normal add-combatant flow. Use the same shape as top-level `combatants:` entries; initiative auto-rolls if omitted. |
+| `fired`          | boolean                | Tracker-managed. Defaults `false`. Set to `true` when the DM acknowledges the banner. **Latched:** once fired, the rung never refires for this encounter. |
+
+Semantics:
+
+- Ticking is **per-application**: each counter-typed effect committed adds 1.
+- The DM can also manually tick `+1` via a chip in the action bar.
+- Each tick produces a `counter` log entry so undo works.
+- When a tick brings `current >= at` on an unfired rung, a banner appears with an Ack button.
+- Multiple rungs can be due at once (a tick that jumps the counter past several thresholds fires all of them).
+- Ack: applies `add_combatants` (if any), sets `fired: true`, banner disappears.
+- Undoing a tick decrements `current` but does **not** unset `fired` on already-acked rungs (the consequence happened in the game world).
+- Counters with `visible: true` also render in the inline view for players.
 
 ---
 

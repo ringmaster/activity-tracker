@@ -18,57 +18,91 @@ export function serializeEncounterYaml(data: EncounterData): string {
   });
 }
 
-/**
- * Write updated YAML back to the code block in the note.
- * Uses app.vault.process() for atomic read-modify-write.
- *
- * Instead of relying on sectionInfo line numbers (whose inclusive/exclusive
- * semantics vary), we find the code block fences by scanning content near
- * the expected location.
- */
+interface BlockBounds {
+  openIdx: number;
+  closeIdx: number;
+  encounterName: string | null;
+}
+
+/** Scan file content for all dnd-combat fenced blocks. Returns each block's
+ *  opening and closing fence line indices and the `encounter:` name parsed
+ *  from its body (or null if missing/unparseable). */
+function findCombatBlocks(lines: string[], language: string): BlockBounds[] {
+  const blocks: BlockBounds[] = [];
+  const openRe = new RegExp("^\\s*```" + escapeRegex(language) + "\\s*$");
+  let i = 0;
+  while (i < lines.length) {
+    if (openRe.test(lines[i])) {
+      const openIdx = i;
+      let j = i + 1;
+      while (j < lines.length && !lines[j].trimStart().startsWith("```")) j++;
+      if (j < lines.length) {
+        const body = lines.slice(openIdx + 1, j).join("\n");
+        blocks.push({
+          openIdx,
+          closeIdx: j,
+          encounterName: extractEncounterName(body),
+        });
+        i = j + 1;
+        continue;
+      }
+    }
+    i++;
+  }
+  return blocks;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Pull the `encounter:` top-level key value from raw YAML body text without
+ *  full parsing (parse may fail or be expensive). */
+function extractEncounterName(body: string): string | null {
+  const lines = body.split("\n");
+  for (const line of lines) {
+    const m = line.match(/^encounter:\s*(.*)$/);
+    if (m) {
+      let val = m[1].trim();
+      // Strip optional surrounding quotes
+      if ((val.startsWith('"') && val.endsWith('"'))
+          || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      return val.length > 0 ? val : null;
+    }
+  }
+  return null;
+}
+
+/** Write updated YAML back to the code block in the note. Re-derives block
+ *  bounds by scanning the file for fenced `language` blocks and matching the
+ *  one whose body's `encounter:` field equals `encounterName`. This is robust
+ *  against stale line numbers from sibling-block writes. */
 export async function flushToFile(
   app: App,
   file: TFile,
-  sectionStart: number,
-  _sectionEnd: number,
+  language: string,
+  encounterName: string,
   data: EncounterData,
 ): Promise<void> {
   const newYaml = serializeEncounterYaml(data);
 
-  console.log("[dnd-combat] flushToFile called, sectionStart:", sectionStart);
-  console.log("[dnd-combat] YAML output preview:", newYaml.slice(0, 200));
-
   await app.vault.process(file, (content) => {
     const lines = content.split("\n");
+    const blocks = findCombatBlocks(lines, language);
+    const block = blocks.find((b) => b.encounterName === encounterName);
 
-    // Find the opening fence at or near sectionStart
-    let openIdx = sectionStart;
-    while (openIdx < lines.length && !lines[openIdx].trimStart().startsWith("```")) {
-      openIdx++;
-    }
-
-    // Find the closing fence: scan forward from the line after the opening fence
-    let closeIdx = openIdx + 1;
-    while (closeIdx < lines.length) {
-      if (lines[closeIdx].trimStart().startsWith("```")) break;
-      closeIdx++;
-    }
-
-    if (closeIdx >= lines.length) {
-      console.error("[dnd-combat] No closing fence found! openIdx:", openIdx, "lines:", lines.length);
+    if (!block) {
+      console.error(
+        `[dnd-combat] flushToFile: no block found for encounter "${encounterName}" in ${file.path}; refusing to write`,
+      );
       return content;
     }
 
-    console.log("[dnd-combat] Fence bounds: open=%d close=%d totalLines=%d", openIdx, closeIdx, lines.length);
-    console.log("[dnd-combat] Opening fence line:", JSON.stringify(lines[openIdx]));
-    console.log("[dnd-combat] Closing fence line:", JSON.stringify(lines[closeIdx]));
-
-    const before = lines.slice(0, openIdx + 1);
-    const after = lines.slice(closeIdx);
-    const result = [...before, newYaml.trimEnd(), ...after].join("\n");
-
-    console.log("[dnd-combat] Result preview:", result.slice(0, 300));
-    return result;
+    const before = lines.slice(0, block.openIdx + 1);
+    const after = lines.slice(block.closeIdx);
+    return [...before, newYaml.trimEnd(), ...after].join("\n");
   });
 }
 
@@ -79,8 +113,8 @@ export function createDebouncedFlush(
 ): {
   schedule: (
     file: TFile,
-    sectionStart: number,
-    sectionEnd: number,
+    language: string,
+    encounterName: string,
     data: EncounterData,
   ) => void;
   cancel: () => void;
@@ -88,11 +122,11 @@ export function createDebouncedFlush(
   let timer: ReturnType<typeof setTimeout> | null = null;
 
   return {
-    schedule(file, sectionStart, sectionEnd, data) {
+    schedule(file, language, encounterName, data) {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         timer = null;
-        flushToFile(app, file, sectionStart, sectionEnd, data);
+        flushToFile(app, file, language, encounterName, data);
       }, delayMs);
     },
     cancel() {

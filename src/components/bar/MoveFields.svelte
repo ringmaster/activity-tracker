@@ -29,6 +29,18 @@
     ...encounter.prepositions,
   ]);
 
+  /** Defensive: filter out any duplicate zone IDs to keep keyed each blocks safe. */
+  let uniqueZones = $derived.by(() => {
+    const seen = new Set<string>();
+    const out: typeof encounter.zones = [];
+    for (const z of encounter.zones) {
+      if (seen.has(z.id)) continue;
+      seen.add(z.id);
+      out.push(z);
+    }
+    return out;
+  });
+
   function selectZone(zoneId: string) {
     fleeing = false;
     selectedZoneId = zoneId;
@@ -118,7 +130,7 @@
       title="Flee the encounter"
     >Flee</button>
 
-    {#each encounter.zones as zone (zone.id)}
+    {#each uniqueZones as zone (zone.id)}
       <button
         class="dnd-bar-btn dnd-zone-btn"
         class:selected={!fleeing && selectedZoneId === zone.id}

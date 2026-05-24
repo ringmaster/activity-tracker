@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
-  import type { Combatant } from "../../types/encounter";
+  import type { Combatant, Counter, LadderRung } from "../../types/encounter";
   import { addCombatant, endEncounter } from "../../state/combat-engine.svelte";
+  import { tickCounter } from "../../state/counter-engine.svelte";
 
   let { encounter, onClose }: {
     encounter: EncounterState;
@@ -25,6 +26,18 @@
     confirmEnd = false;
     endEncounter(encounter);
     onClose();
+  }
+
+  function nextThreshold(ladder: LadderRung[] | undefined): number | null {
+    const next = (ladder ?? []).find((r) => !r.fired);
+    return next ? next.at : null;
+  }
+
+  function manualTick(counter: Counter) {
+    // Manual tick from the actor dropdown: no `by` (it's a DM hand-tick, not
+    // attributable to a combatant action). The log entry still records what
+    // happened for prose reconstruction.
+    tickCounter(encounter, counter.id, 1);
   }
 
   function swapTo(id: string) {
@@ -88,13 +101,30 @@
             {/if}
           </div>
         </div>
-        <button
-          class="dnd-end-btn"
-          class:confirming={confirmEnd}
-          onclick={handleEnd}
-        >
-          {confirmEnd ? "Confirm?" : "End"}
-        </button>
+        <div style="display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
+          {#each encounter.counters as counter (counter.id)}
+            {@const next = nextThreshold(counter.ladder)}
+            <button
+              type="button"
+              class="dnd-counter-chip"
+              title={counter.note ?? ""}
+              onclick={() => manualTick(counter)}
+            >
+              <span class="dnd-counter-name">{counter.name}</span>
+              <span class="dnd-counter-value">
+                {counter.current}{#if next != null}/{next}{/if}
+              </span>
+              <span class="dnd-counter-plus">+1</span>
+            </button>
+          {/each}
+          <button
+            class="dnd-end-btn"
+            class:confirming={confirmEnd}
+            onclick={handleEnd}
+          >
+            {confirmEnd ? "Confirm?" : "End"}
+          </button>
+        </div>
       </div>
       {#if actor.conditions.length > 0 || actor.tags.length > 0}
         <div>

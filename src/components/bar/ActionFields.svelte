@@ -3,6 +3,7 @@
   import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction, ZonePosition } from "../../types/encounter";
   import { renderSpellDescription } from "../../utils/spell-renderer";
   import { commitAttack, commitHeal, dropConcentration } from "../../state/action-logger.svelte";
+  import { tickCounter } from "../../state/counter-engine.svelte";
   import { generateSpellTag, generateConcentrationTag } from "../../data/spell-tag-generator";
   import { findLibraryAction, searchLibrary } from "../../state/library-loader";
   import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
@@ -10,7 +11,7 @@
   import AddTargetForm from "./AddTargetForm.svelte";
   import { PREPOSITION_ICONS, BUILTIN_PREPOSITIONS } from "../../icons/preposition-icons";
 
-  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "failed";
+  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "counter" | "failed";
 
   interface DamageEffect {
     type: "damage";
@@ -39,11 +40,16 @@
     type: "concentration";
   }
 
+  interface CounterEffect {
+    type: "counter";
+    counterId: string;
+  }
+
   interface FailedEffect {
     type: "failed";
   }
 
-  type SpellEffect = DamageEffect | ConditionEffect | HealEffect | TagEffect | ConcentrationEffect | FailedEffect;
+  type SpellEffect = DamageEffect | ConditionEffect | HealEffect | TagEffect | ConcentrationEffect | CounterEffect | FailedEffect;
 
   const COMMON_CONDITIONS = [
     "blinded", "charmed", "deafened", "frightened", "grappled",
@@ -123,6 +129,7 @@
     return initial;
   }
   let targets = $state<Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>>(buildInitialTargets());
+
 
   let autoTagCount = $derived(
     effects.filter((_, idx) => autoTagIndices.has(idx) && effects[idx]?.type === "tag").length,
@@ -387,7 +394,11 @@
       diceHint = null;
       if (preset !== "heal") setDamageEffects(action.spellDmg.map((d) => ({ dice: "", type: d.type })));
     } else {
+      // Selected action has no damage data; clear the default empty damage
+      // chit (added at component init for the "attack" preset) so abilities
+      // like Dissonant Hush don't show a useless 0 dmg slot.
       diceHint = null;
+      if (preset !== "heal") setDamageEffects([]);
     }
 
     // Prepend attack bonus to dice hint.
@@ -427,9 +438,21 @@
       }
     }
 
+    // Drop any counter chips left over from a previously-selected action, so
+    // re-selecting doesn't accumulate stale ticks.
+    effects = effects.filter((e) => e.type !== "counter");
+
     // --- Auto-populate structured effects from action definition ---
     if (action.actionEffects && action.actionEffects.length > 0) {
       for (const ae of action.actionEffects) {
+        if (ae.type === "counter" && ae.counter) {
+          // Show authored counter ticks as visible chips so the DM doesn't
+          // double-add manually. Skip duplicates.
+          if (!effects.some((e) => e.type === "counter" && (e as CounterEffect).counterId === ae.counter)) {
+            effects = [...effects, { type: "counter", counterId: ae.counter }];
+          }
+          continue;
+        }
         if (ae.type === "tag" && !effects.some((e) => e.type === "tag" && (e as TagEffect).name === ae.name)) {
           const newIdx = effects.length;
           effects = [...effects, {
@@ -600,6 +623,12 @@
         effects = [...effects, { type: "concentration" }];
         isConc = true;
       }
+    } else if (effectType === "counter") {
+      // Default to the first authored counter; user can swap via the chip dropdown
+      const firstCounterId = encounter.counters[0]?.id ?? "";
+      if (firstCounterId) {
+        effects = [...effects, { type: "counter", counterId: firstCounterId }];
+      }
     } else if (effectType === "failed") {
       // Replace all existing effects with a single failed marker
       effects = [{ type: "failed" }];
@@ -757,6 +786,12 @@
     const tagEffects = effects.filter((e) => e.type === "tag") as TagEffect[];
     // All tags from this commit share a castId for cascade cleanup
     const castId = `cast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    // Tag ids generated per tagEffect, in target order. Captured so the log
+    // entry below records them and the rewind path can dismiss precisely.
+    const tagIdsPerEffect = new Map<TagEffect, { tgt: string[]; ids: string[] }>();
+    function newTagId() {
+      return `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    }
     if (tagEffects.length > 0) {
       const affectedTargetIds = selectedTargets.map((t) => t.who);
       for (const tagEffect of tagEffects) {
@@ -772,8 +807,9 @@
           // Deferred effect on self/enemy/ally: tag goes on the ACTOR
           // with resolveTarget pointing to the selected target(s)
           const firstTarget = affectedTargetIds.find((id) => id !== actor.id) ?? affectedTargetIds[0];
+          const tagId = newTagId();
           actor.tags.push({
-            id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: tagId,
             name: tagEffect.name,
             source: actor.id,
             note: tagEffect.note || undefined,
@@ -789,10 +825,12 @@
             uses: tagUses,
             resetOn: tagResetOn,
           });
+          tagIdsPerEffect.set(tagEffect, { tgt: [actor.id], ids: [tagId] });
         } else if (effectOn === "self") {
           // Tag goes on the actor
+          const tagId = newTagId();
           actor.tags.push({
-            id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: tagId,
             name: tagEffect.name,
             source: actor.id,
             note: tagEffect.note || undefined,
@@ -803,13 +841,17 @@
             uses: tagUses,
             resetOn: tagResetOn,
           });
+          tagIdsPerEffect.set(tagEffect, { tgt: [actor.id], ids: [tagId] });
         } else {
           // Tag goes on each selected target
+          const tgtOrder: string[] = [];
+          const ids: string[] = [];
           for (const targetId of affectedTargetIds) {
             const combatant = encounter.getCombatant(targetId);
             if (!combatant) continue;
+            const tagId = newTagId();
             combatant.tags.push({
-              id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              id: tagId,
               name: tagEffect.name,
               source: actor.id,
               note: tagEffect.note || undefined,
@@ -820,23 +862,27 @@
               uses: tagUses,
               resetOn: tagResetOn,
             });
+            tgtOrder.push(targetId);
+            ids.push(tagId);
           }
+          tagIdsPerEffect.set(tagEffect, { tgt: tgtOrder, ids });
         }
       }
       // Log once per tag effect, but skip auto-populated tags from library
       for (let i = 0; i < tagEffects.length; i++) {
         const tagEffect = tagEffects[i];
         if (!tagEffect.name) continue;
-        // Find this tag's index in the full effects array
         const effectIdx = effects.indexOf(tagEffect as any);
-        if (effectIdx >= 0 && autoTagIndices.has(effectIdx)) continue; // auto tag, don't log
+        if (effectIdx >= 0 && autoTagIndices.has(effectIdx)) continue;
+        const captured = tagIdsPerEffect.get(tagEffect);
         encounter.logInsert({
           tag: {
             by: actor.id,
-            tgt: affectedTargetIds,
+            tgt: captured?.tgt ?? affectedTargetIds,
             name: tagEffect.name,
             note: tagEffect.note || undefined,
             via: via || undefined,
+            ids: captured?.ids,
           },
         });
       }
@@ -847,6 +893,17 @@
       const concTag = generateConcentrationTag(via, actor.id);
       concTag.castId = castId;
       actor.tags.push(concTag);
+    }
+
+    // Tick any counters this action contributes to. Counter chips in `effects`
+    // cover both authored counter effects (auto-populated on selection) and
+    // ones the DM added via the "+" menu.
+    const counterIdsToTick = effects
+      .filter((e): e is CounterEffect => e.type === "counter")
+      .map((e) => e.counterId)
+      .filter((id) => id);
+    for (const counterId of counterIdsToTick) {
+      tickCounter(encounter, counterId, 1, actor.id, via || undefined);
     }
 
     encounter.lastTargetIds = selectedTargets.map((t) => t.who);
@@ -974,6 +1031,23 @@
         <span class="dnd-effect-label">Conc</span>
         <button class="dnd-effect-remove" onclick={() => { removeEffect(idx); isConc = false; }}>&times;</button>
       </div>
+    {:else if effect.type === "counter"}
+      <div class="dnd-effect-widget dnd-counter-widget">
+        <span class="dnd-effect-label">+1</span>
+        <select
+          class="dnd-action-input"
+          value={(effect as CounterEffect).counterId}
+          onchange={(e) => {
+            const v = (e.target as HTMLSelectElement).value;
+            effects = effects.map((eff, i) => i === idx && eff.type === "counter" ? { ...eff, counterId: v } : eff);
+          }}
+        >
+          {#each encounter.counters as counter (counter.id)}
+            <option value={counter.id}>{counter.name}</option>
+          {/each}
+        </select>
+        <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
+      </div>
     {:else if effect.type === "failed"}
       <div class="dnd-effect-widget dnd-failed-widget">
         <span class="dnd-effect-label">{preset === "attack" ? "Miss" : "Failed"}</span>
@@ -1033,6 +1107,12 @@
           <span class="dnd-via-name">Concentration</span>
           <span class="dnd-via-detail">caster must concentrate</span>
         </button>
+        {#if encounter.counters.length > 0}
+          <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("counter")}>
+            <span class="dnd-via-name">Counter</span>
+            <span class="dnd-via-detail">tick an encounter counter (+1)</span>
+          </button>
+        {/if}
         <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("failed")}>
           <span class="dnd-via-name">{preset === "attack" ? "Miss" : "Failed"}</span>
           <span class="dnd-via-detail">action has no effect</span>

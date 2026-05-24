@@ -45,7 +45,7 @@ export interface Behavior {
 
 /** An effect that auto-populates the action bar when this action is selected. */
 export interface ActionEffect {
-  type: "tag" | "condition" | "concentration" | "damage" | "heal";
+  type: "tag" | "condition" | "concentration" | "damage" | "heal" | "counter";
   /** For tag/condition: the name of the tag or condition to apply. */
   name?: string;
   /** Who receives the effect: "target" | "self" | "enemy" | "ally". */
@@ -66,6 +66,8 @@ export interface ActionEffect {
   uses?: number;
   /** When to reset uses to max. "turn" = start of tag carrier's turn. */
   resetOn?: "turn";
+  /** For type: "counter" — id of the counter to tick. Always +1 per application. */
+  counter?: string;
 }
 
 export interface CombatAction {
@@ -175,6 +177,8 @@ export interface Combatant {
   hidden?: boolean;
   /** NPCs marked friendly group with the party; PCs marked hostile group with NPCs. */
   friendly?: boolean;
+  /** Authored coaching hint shown as blue text under the bar on this combatant's turn. */
+  turn_hint?: string;
 }
 
 /** The authored shape before expansion; `count` triggers multi-combatant generation. */
@@ -200,6 +204,7 @@ export interface AuthoredCombatant {
   spells?: (string | Spell)[];
   behavior?: Behavior;
   friendly?: boolean;
+  turn_hint?: string;
 }
 
 
@@ -234,6 +239,40 @@ export interface Spell {
   effect?: string;
 }
 
+export interface LadderRung {
+  /** Counter value at or above which this rung fires. */
+  at: number;
+  /** Banner text shown to the DM when the rung fires. */
+  banner: string;
+  /** Combatants spawned via the normal add-combatant flow when the rung is acked. */
+  add_combatants?: AuthoredCombatant[];
+  /** Tracker-managed. True once the DM has acknowledged the banner. Latched. */
+  fired?: boolean;
+}
+
+export interface Counter {
+  id: string;
+  name: string;
+  /** DM-facing description shown in the chip tooltip / inline view. */
+  note?: string;
+  /** When true, the counter also appears in the inline view for players. Default false (DM-only). */
+  visible?: boolean;
+  /** Runtime accumulator. Starts at 0. */
+  current: number;
+  /** Empty ladder = pure accumulator (no banners ever fire). */
+  ladder?: LadderRung[];
+}
+
+/** Authored shape: `current` may be omitted (defaults to 0). */
+export interface AuthoredCounter {
+  id: string;
+  name: string;
+  note?: string;
+  visible?: boolean;
+  current?: number;
+  ladder?: LadderRung[];
+}
+
 export interface EncounterData {
   encounter: string;
   active: boolean;
@@ -244,6 +283,7 @@ export interface EncounterData {
   active_obligations: ActiveObligation[];
   zones?: Zone[];
   prepositions?: string[];
+  counters?: Counter[];
 }
 
 /** The raw YAML shape before expansion (combatants may have `count`). */
@@ -257,4 +297,5 @@ export interface AuthoredEncounterData {
   active_obligations?: ActiveObligation[];
   zones?: Zone[];
   prepositions?: string[];
+  counters?: AuthoredCounter[];
 }

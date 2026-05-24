@@ -127,6 +127,8 @@ export interface TagEntry {
     name: string;
     note?: string;
     via?: string;
+    /** Per-target tag ids, in the same order as `tgt`. Enables precise undo. */
+    ids?: string[];
   };
 }
 
@@ -136,6 +138,27 @@ export interface MoveEntry {
     from?: ZonePosition | null;
     to?: ZonePosition;
     fled?: boolean;
+  };
+}
+
+export interface CounterEntry {
+  counter: {
+    id: string;
+    delta: number;
+    by?: string;
+    via?: string;
+    at: string;
+  };
+}
+
+export interface AckRungEntry {
+  ack_rung: {
+    counter: string;
+    rungIndex: number;
+    at: string;
+    /** When true, the rung was dismissed without applying its consequences
+     *  (no banner text in the prose summary, no add_combatants spawned). */
+    skipped?: boolean;
   };
 }
 
@@ -156,4 +179,6 @@ export type LogEntry =
   | RemoveCombatantEntry
   | ConditionEntry
   | TagEntry
-  | MoveEntry;
+  | MoveEntry
+  | CounterEntry
+  | AckRungEntry;

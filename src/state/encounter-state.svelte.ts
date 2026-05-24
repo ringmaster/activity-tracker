@@ -1,6 +1,8 @@
 import type { App, TFile } from "obsidian";
 import type {
   Combatant,
+  Counter,
+  AuthoredCounter,
   EncounterData,
   AuthoredEncounterData,
   Spell,
@@ -33,6 +35,9 @@ export class EncounterState {
 
   // Active obligations
   activeObligations = $state<ActiveObligation[]>([]);
+
+  // Counters (encounter-scoped accumulators with laddered thresholds)
+  counters = $state<Counter[]>([]);
 
   // Transient bar state (not persisted to YAML)
   swappedActor = $state<string | null>(null);
@@ -92,6 +97,11 @@ export class EncounterState {
   /** Called when the encounter deactivates so the plugin can hide the bar. */
   onDeactivate: (() => void) | null = null;
 
+  /** Plugin sets this so the inline view can disable Run/Continue when another
+   *  encounter in the same file is already active. Returns the name of the
+   *  blocking encounter, or null if none. */
+  blockingEncounterName: (() => string | null) | null = null;
+
   /** Path to the party note for persisting learned PC actions. */
   partyNotePath: string = "party.yaml";
   libraryPaths: string = "library.yaml, srd-library.yaml";
@@ -99,21 +109,18 @@ export class EncounterState {
   // File reference for YAML persistence
   app: App;
   private file: TFile;
-  private sectionStart: number;
-  private sectionEnd: number;
+  private language: string;
   private debouncedFlush: ReturnType<typeof createDebouncedFlush>;
 
   constructor(
     app: App,
     file: TFile,
-    sectionStart: number,
-    sectionEnd: number,
+    language: string,
     data: AuthoredEncounterData | EncounterData,
   ) {
     this.app = app;
     this.file = file;
-    this.sectionStart = sectionStart;
-    this.sectionEnd = sectionEnd;
+    this.language = language;
     this.debouncedFlush = createDebouncedFlush(app);
 
     this.loadFromData(data);
@@ -129,17 +136,16 @@ export class EncounterState {
     this.activeObligations = data.active_obligations ?? [];
     this.zones = data.zones ?? [];
     this.prepositions = data.prepositions ?? [];
+    this.counters = normalizeCounters(data.counters);
 
-    // Expand combatants if they have `count` fields (authored format)
-    if (data.combatants?.some((c: any) => c.count && c.count > 1)) {
-      this.combatants = expandCombatants(data.combatants).map((c) =>
-        fillCombatantDefaults(c),
-      );
-    } else {
-      this.combatants = (data.combatants ?? []).map((c) =>
-        fillCombatantDefaults(c as Combatant),
-      );
-    }
+    // Always run through expandCombatants. It handles `count > 1` expansion
+    // AND auto-derives `id: toSlug(name)` for unique entries that omit an
+    // explicit id, so handwritten YAML like the Owlbear sample (no id, no
+    // count) still gets a stable, addressable id. Skipping this branch is
+    // what made the Owlbear target as undefined.
+    this.combatants = expandCombatants(data.combatants ?? []).map((c) =>
+      fillCombatantDefaults(c),
+    );
 
     // Default any combatant without an explicit zone to the first zone, if any
     const defaultZoneId = this.zones[0]?.id;
@@ -153,6 +159,11 @@ export class EncounterState {
   /** Get a combatant by ID. */
   getCombatant(id: string): Combatant | undefined {
     return this.combatants.find((c) => c.id === id);
+  }
+
+  /** Get a counter by ID. */
+  getCounter(id: string): Counter | undefined {
+    return this.counters.find((c) => c.id === id);
   }
 
   /**
@@ -198,12 +209,6 @@ export class EncounterState {
     return undefined;
   }
 
-  /** Update section bounds (if code block processor re-runs). */
-  updateSectionBounds(start: number, end: number): void {
-    this.sectionStart = start;
-    this.sectionEnd = end;
-  }
-
   /** Serialize current state to EncounterData (for YAML output).
    *  Uses JSON round-trip to strip Svelte reactive proxies. */
   toData(): EncounterData {
@@ -214,18 +219,21 @@ export class EncounterState {
       current_turn: this.currentTurn,
       zones: this.zones.length > 0 ? this.zones : undefined,
       prepositions: this.prepositions.length > 0 ? this.prepositions : undefined,
+      counters: this.counters.length > 0 ? this.counters : undefined,
       combatants: this.combatants,
       log: this.log,
       active_obligations: this.activeObligations,
     }));
   }
 
-  /** Flush current state to the YAML code block (debounced). */
+  /** Flush current state to the YAML code block (debounced). The block is
+   *  located by re-scanning the file and matching the encounter name, so
+   *  sibling-block writes that shift line numbers don't corrupt the target. */
   flush(): void {
     this.debouncedFlush.schedule(
       this.file,
-      this.sectionStart,
-      this.sectionEnd,
+      this.language,
+      this.encounter,
       this.toData(),
     );
   }
@@ -236,8 +244,8 @@ export class EncounterState {
     await flushToFile(
       this.app,
       this.file,
-      this.sectionStart,
-      this.sectionEnd,
+      this.language,
+      this.encounter,
       this.toData(),
     );
   }
@@ -246,6 +254,27 @@ export class EncounterState {
   destroy(): void {
     this.debouncedFlush.cancel();
   }
+}
+
+/** Fill defaults on authored counters: current defaults to 0; each ladder rung's
+ *  fired flag defaults to false. */
+function normalizeCounters(
+  counters: (Counter | AuthoredCounter)[] | undefined,
+): Counter[] {
+  if (!counters || counters.length === 0) return [];
+  return counters.map((c) => ({
+    id: c.id,
+    name: c.name,
+    note: c.note,
+    visible: c.visible ?? false,
+    current: c.current ?? 0,
+    ladder: (c.ladder ?? []).map((r) => ({
+      at: r.at,
+      banner: r.banner,
+      add_combatants: r.add_combatants,
+      fired: r.fired ?? false,
+    })),
+  }));
 }
 
 /** Normalize spell slots from authored format (plain number = max) to runtime format ({current, max}). */
@@ -264,6 +293,17 @@ function normalizeSpellSlots(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+/** Backfill missing tag IDs so handwritten YAML (which often omits them) doesn't
+ *  blow up Svelte's keyed each blocks with undefined-vs-undefined collisions. */
+function ensureTagIds(tags: Combatant["tags"]): Combatant["tags"] {
+  let counter = 0;
+  return (tags ?? []).map((t) => {
+    if (t && t.id) return t;
+    counter++;
+    return { ...t, id: `tag-${Date.now()}-${counter}-${Math.random().toString(36).slice(2, 6)}` };
+  });
+}
+
 /** Fill in default values for combatant fields that may be absent in YAML. */
 function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name: string; type: "npc" | "pc" | "object" }): Combatant {
   const base: Combatant = {
@@ -273,7 +313,7 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
     init: partial.init ?? null,
     temp_hp: partial.temp_hp ?? 0,
     conditions: partial.conditions ?? [],
-    tags: partial.tags ?? [],
+    tags: ensureTagIds(partial.tags ?? []),
     concentration: partial.concentration ?? null,
   };
 
@@ -298,6 +338,7 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
   if (partial.hidden) base.hidden = partial.hidden;
   if (partial.friendly != null) base.friendly = partial.friendly;
   if (partial.zone) base.zone = partial.zone;
+  if (partial.turn_hint) base.turn_hint = partial.turn_hint;
 
   return base;
 }
