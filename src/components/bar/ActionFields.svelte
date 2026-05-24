@@ -756,9 +756,22 @@
       .filter(([_, t]) => t.checked)
       .map(([id, t]) => ({ who: id, outcome: t.outcome }));
 
-    // If no targets selected: attacks require a target; casts/heals default to self
+    // If no targets selected: casts/heals default to self. Attacks normally
+    // require a target, EXCEPT library abilities like Hide, Dodge, Dash,
+    // Disengage that do no damage and apply only to the actor; for those,
+    // default to self instead of refusing to commit.
     if (selectedTargets.length === 0) {
-      if (preset === "attack") return;
+      if (preset === "attack") {
+        const hasDamage = !!(
+          (selectedLibAction?.dmg && selectedLibAction.dmg.length > 0)
+          || selectedLibAction?.damageType
+        );
+        const libEffects = selectedLibAction?.effects ?? [];
+        const hasNonSelfEffect = libEffects.some((e) =>
+          e.on === "target" || e.on === "enemy" || e.on === "ally"
+        );
+        if (hasDamage || hasNonSelfEffect) return;
+      }
       selectedTargets = [{ who: actor.id, outcome: "full" as const }];
     }
 

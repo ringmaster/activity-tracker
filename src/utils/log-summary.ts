@@ -69,10 +69,13 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
 
     // Self-targeted: drop "on [self]"
     if (selfOnly) {
-      // For self-only spells with no damage, use "cast" regardless of custom verb
-      // (the verb is for the resolve/attack phase, not the initial cast)
+      // Self-targeted with damage and a custom verb (rare): keep both.
       if (customVerb && !allNoDamage) return `${actorName} ${customVerb} ${entry.attack.via}.`;
-      if (isSpell || customVerb) return `${actorName} cast ${entry.attack.via}.`;
+      // Self-targeted spells: the cast itself is the action.
+      if (isSpell) return `${actorName} cast ${entry.attack.via}.`;
+      // Self-targeted abilities with a verb (Hide -> "hides", Dodge ->
+      // "dodges"): the verb names the action, so the via is redundant.
+      if (customVerb) return `${actorName} ${customVerb}.`;
       return `${actorName} used ${entry.attack.via}.`;
     }
 
