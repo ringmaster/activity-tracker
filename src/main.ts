@@ -13,12 +13,25 @@ import InlineView from "./components/InlineView.svelte";
 import StickyBar from "./components/StickyBar.svelte";
 import { EncounterState } from "./state/encounter-state.svelte";
 import { parseEncounterYaml } from "./state/yaml-bridge";
-import { loadLibrary, invalidateLibraryCache } from "./state/library-loader";
+import {
+  loadLibrary,
+  invalidateLibraryCache,
+  scanLibraryCandidates,
+  mergeCatalog,
+  catalogToPaths,
+  pathsStringToCatalog,
+  deriveLabel,
+  type LibraryCatalogEntry,
+} from "./state/library-loader";
 import { expandCombatants } from "./utils/id-generator";
 
 interface ActivityTrackerSettings {
   partyNotePath: string;
-  /** Comma-separated list of vault paths to YAML library files. */
+  /** Persisted catalog of discovered library files and their enabled state.
+   *  This is the source of truth; `libraryPaths` is derived from it on save. */
+  libraryCatalog: LibraryCatalogEntry[];
+  /** Derived comma-separated path string for runtime consumers (encounter
+   *  state, action logger). Recomputed from libraryCatalog on save. */
   libraryPaths: string;
   codeBlockLanguage: string;
   debugOverlay: boolean;
@@ -26,6 +39,7 @@ interface ActivityTrackerSettings {
 
 const DEFAULT_SETTINGS: ActivityTrackerSettings = {
   partyNotePath: "party.yaml",
+  libraryCatalog: [],
   libraryPaths: "library.yaml, weapons.yaml, srd-library.yaml",
   codeBlockLanguage: "dnd-combat",
   debugOverlay: false,
@@ -465,19 +479,95 @@ export default class ActivityTrackerPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    // Migration: seed catalog from legacy libraryPaths string on first run.
+    if (
+      (!this.settings.libraryCatalog || this.settings.libraryCatalog.length === 0) &&
+      this.settings.libraryPaths
+    ) {
+      this.settings.libraryCatalog = pathsStringToCatalog(this.settings.libraryPaths);
+    }
+    // Always derive libraryPaths from the catalog after load.
+    this.settings.libraryPaths = catalogToPaths(this.settings.libraryCatalog);
   }
 
   async saveSettings() {
+    // Catalog is canonical; keep libraryPaths in sync for runtime consumers.
+    this.settings.libraryPaths = catalogToPaths(this.settings.libraryCatalog);
     await this.saveData(this.settings);
+    // Push updated paths into every live encounter state so the inline
+    // Reload-library button and the action logger pick up the change
+    // without requiring a re-open of the note.
+    for (const state of this.encounterStates.values()) {
+      state.libraryPaths = this.settings.libraryPaths;
+      state.partyNotePath = this.settings.partyNotePath;
+    }
+    // Refresh the autocomplete cache against the new path set. The catalog
+    // toggle handlers invalidate first, so this call does the real reload.
+    await loadLibrary(this.app, this.settings.libraryPaths);
   }
 }
 
 class ActivityTrackerSettingTab extends PluginSettingTab {
   plugin: ActivityTrackerPlugin;
+  private catalogContainer: HTMLElement | null = null;
 
   constructor(app: App, plugin: ActivityTrackerPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+  }
+
+  private renderCatalog(): void {
+    if (!this.catalogContainer) return;
+    this.catalogContainer.empty();
+    const catalog = this.plugin.settings.libraryCatalog;
+    if (catalog.length === 0) {
+      this.catalogContainer.createDiv({
+        text: "No libraries cataloged yet. Click 'Scan vault' above to discover .yaml library files.",
+        cls: "setting-item-description",
+      });
+      return;
+    }
+    for (const entry of catalog) {
+      const setting = new Setting(this.catalogContainer);
+      setting.setName(entry.label);
+
+      const parts: string[] = [entry.path];
+      if (entry.missing) {
+        parts.push("missing file");
+      } else {
+        const counts: string[] = [];
+        if (entry.actionCount > 0) {
+          counts.push(`${entry.actionCount} action${entry.actionCount === 1 ? "" : "s"}`);
+        }
+        if (entry.spellCount > 0) {
+          counts.push(`${entry.spellCount} spell${entry.spellCount === 1 ? "" : "s"}`);
+        }
+        if (counts.length) parts.push(counts.join(", "));
+      }
+      setting.setDesc(parts.join(" • "));
+
+      setting.addToggle((tg) =>
+        tg.setValue(entry.enabled).onChange(async (value) => {
+          entry.enabled = value;
+          invalidateLibraryCache();
+          await this.plugin.saveSettings();
+        }),
+      );
+
+      setting.addExtraButton((btn) =>
+        btn
+          .setIcon("trash")
+          .setTooltip("Remove from catalog")
+          .onClick(async () => {
+            const idx = this.plugin.settings.libraryCatalog.indexOf(entry);
+            if (idx === -1) return;
+            this.plugin.settings.libraryCatalog.splice(idx, 1);
+            invalidateLibraryCache();
+            await this.plugin.saveSettings();
+            this.renderCatalog();
+          }),
+      );
+    }
   }
 
   display(): void {
@@ -499,16 +589,70 @@ class ActivityTrackerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Library files")
-      .setDesc("Comma-separated paths to YAML library files (e.g., library.yaml, srd-library.yaml)")
-      .addText((text) =>
-        text
-          .setPlaceholder("library.yaml, srd-library.yaml")
-          .setValue(this.plugin.settings.libraryPaths)
-          .onChange(async (value) => {
-            this.plugin.settings.libraryPaths = value;
+      .setDesc(
+        "Scan your vault for .yaml files that parse as a library, then toggle which to load. The catalog is cached — only rescan when you add, move, or remove files.",
+      )
+      .addButton((btn) =>
+        btn
+          .setButtonText("Scan vault")
+          .setCta()
+          .onClick(async () => {
+            btn.setButtonText("Scanning...").setDisabled(true);
+            try {
+              const scanned = await scanLibraryCandidates(this.plugin.app);
+              this.plugin.settings.libraryCatalog = mergeCatalog(
+                this.plugin.settings.libraryCatalog,
+                scanned,
+              );
+              invalidateLibraryCache();
+              await this.plugin.saveSettings();
+              this.renderCatalog();
+            } finally {
+              btn.setButtonText("Scan vault").setDisabled(false);
+            }
+          }),
+      );
+
+    this.catalogContainer = containerEl.createDiv({
+      cls: "activity-tracker-catalog",
+    });
+    this.renderCatalog();
+
+    let manualPathInput: HTMLInputElement | null = null;
+    new Setting(containerEl)
+      .setName("Add path manually")
+      .setDesc(
+        "Add a vault path to the catalog without scanning. Useful for files in unusual locations.",
+      )
+      .addText((text) => {
+        text.setPlaceholder("path/to/library.yaml");
+        manualPathInput = text.inputEl;
+      })
+      .addButton((btn) =>
+        btn.setButtonText("Add").onClick(async () => {
+          const value = manualPathInput?.value.trim();
+          if (!value) return;
+          const exists = this.plugin.settings.libraryCatalog.some(
+            (e) => e.path === value,
+          );
+          if (!exists) {
+            this.plugin.settings.libraryCatalog.push({
+              path: value,
+              label: deriveLabel(value),
+              actionCount: 0,
+              spellCount: 0,
+              enabled: true,
+              missing: true,
+            });
+            this.plugin.settings.libraryCatalog.sort((a, b) =>
+              a.path.localeCompare(b.path),
+            );
             invalidateLibraryCache();
             await this.plugin.saveSettings();
-          }),
+            if (manualPathInput) manualPathInput.value = "";
+            this.renderCatalog();
+          }
+        }),
       );
 
     new Setting(containerEl)
@@ -532,7 +676,23 @@ class ActivityTrackerSettingTab extends PluginSettingTab {
                 await this.plugin.app.vault.create("srd-library.yaml", content);
               }
               btn.setButtonText("Downloaded!");
+              const catalog = this.plugin.settings.libraryCatalog;
+              if (!catalog.some((e) => e.path === "srd-library.yaml")) {
+                catalog.push({
+                  path: "srd-library.yaml",
+                  label: deriveLabel("srd-library.yaml"),
+                  actionCount: 0,
+                  spellCount: 0,
+                  enabled: true,
+                });
+                catalog.sort((a, b) => a.path.localeCompare(b.path));
+              } else {
+                const entry = catalog.find((e) => e.path === "srd-library.yaml");
+                if (entry) entry.enabled = true;
+              }
               invalidateLibraryCache();
+              await this.plugin.saveSettings();
+              this.renderCatalog();
               loadLibrary(this.plugin.app, this.plugin.settings.libraryPaths);
             } catch (e: any) {
               btn.setButtonText(`Error: ${e.message}`);

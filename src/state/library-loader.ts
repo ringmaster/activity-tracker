@@ -57,6 +57,136 @@ export interface LibraryLoadResult {
   found: boolean;
 }
 
+export interface LibraryScanResult {
+  path: string;
+  label: string;
+  actionCount: number;
+  spellCount: number;
+}
+
+export interface LibraryCatalogEntry {
+  path: string;
+  label: string;
+  actionCount: number;
+  spellCount: number;
+  enabled: boolean;
+  missing?: boolean;
+}
+
+export function deriveLabel(path: string): string {
+  return path
+    .replace(/^.*\//, "")
+    .replace(/\.\w+$/, "")
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Comma-separated path string of catalog entries with enabled=true. */
+export function catalogToPaths(catalog: LibraryCatalogEntry[] | undefined): string {
+  if (!catalog) return "";
+  return catalog
+    .filter((e) => e.enabled)
+    .map((e) => e.path)
+    .join(", ");
+}
+
+/** Seed a catalog from a legacy comma-separated paths string. */
+export function pathsStringToCatalog(paths: string): LibraryCatalogEntry[] {
+  return paths
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((path) => ({
+      path,
+      label: deriveLabel(path),
+      actionCount: 0,
+      spellCount: 0,
+      enabled: true,
+    }));
+}
+
+/**
+ * Reconcile a fresh scan against an existing catalog:
+ *  - existing entries keep their `enabled` state
+ *  - entries no longer found are marked `missing: true`
+ *  - newly discovered entries are added with `enabled: false`
+ */
+export function mergeCatalog(
+  existing: LibraryCatalogEntry[],
+  scanned: LibraryScanResult[],
+): LibraryCatalogEntry[] {
+  const scannedByPath = new Map(scanned.map((s) => [s.path, s]));
+  const seen = new Set<string>();
+  const merged: LibraryCatalogEntry[] = [];
+
+  for (const entry of existing) {
+    const hit = scannedByPath.get(entry.path);
+    if (hit) {
+      merged.push({
+        path: entry.path,
+        label: hit.label,
+        actionCount: hit.actionCount,
+        spellCount: hit.spellCount,
+        enabled: entry.enabled,
+      });
+    } else {
+      merged.push({
+        path: entry.path,
+        label: entry.label,
+        actionCount: entry.actionCount,
+        spellCount: entry.spellCount,
+        enabled: entry.enabled,
+        missing: true,
+      });
+    }
+    seen.add(entry.path);
+  }
+
+  for (const scan of scanned) {
+    if (seen.has(scan.path)) continue;
+    merged.push({
+      path: scan.path,
+      label: scan.label,
+      actionCount: scan.actionCount,
+      spellCount: scan.spellCount,
+      enabled: false,
+    });
+  }
+
+  merged.sort((a, b) => a.path.localeCompare(b.path));
+  return merged;
+}
+
+/**
+ * Walk the vault for .yaml/.yml files that parse as a library
+ * (i.e. yield at least one action or spell via the same parser
+ * used by loadLibrary). Returns sorted results.
+ */
+export async function scanLibraryCandidates(app: App): Promise<LibraryScanResult[]> {
+  const results: LibraryScanResult[] = [];
+  for (const file of app.vault.getFiles()) {
+    const ext = file.extension?.toLowerCase();
+    if (ext !== "yaml" && ext !== "yml") continue;
+    try {
+      const content = await app.vault.read(file);
+      const parsed = parseLibraryContent(content);
+      if (parsed.length === 0) continue;
+      const spellCount = parsed.filter((a) => a.type === "spell").length;
+      const actionCount = parsed.length - spellCount;
+      results.push({
+        path: file.path,
+        label: deriveLabel(file.path),
+        actionCount,
+        spellCount,
+      });
+    } catch {
+      // not a library; skip
+    }
+  }
+  results.sort((a, b) => a.path.localeCompare(b.path));
+  return results;
+}
+
 /**
  * Load libraries and return per-file results for UI feedback.
  * Always invalidates the cache first to force a fresh load.
