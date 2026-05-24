@@ -3,6 +3,7 @@
   import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction, ZonePosition } from "../../types/encounter";
   import type { Rider } from "../../types/party";
   import { constrainToViewport } from "../../utils/constrain-to-viewport.svelte";
+  import { rollDiceExpression } from "../../utils/dice";
   import { renderSpellDescription } from "../../utils/spell-renderer";
   import { commitAttack, commitHeal, dropConcentration } from "../../state/action-logger.svelte";
   import { tickCounter } from "../../state/counter-engine.svelte";
@@ -19,6 +20,9 @@
     type: "damage";
     amount: number;
     damageType: string;
+    /** Authored dice expression for this component (e.g. "2d6+5"). Used by
+     *  the double-tap-to-roll affordance on the damage input. */
+    dice?: string;
   }
 
   interface ConditionEffect {
@@ -586,6 +590,29 @@
 
   /** Replace existing damage effects with ones matching the selected action's damage types.
    *  Preserves amounts already entered by the user. */
+  /** Double-tap handler for damage/heal/rider inputs: if the input is empty
+   *  and `dice` is a valid expression, roll it and write the result into
+   *  the input, then select it so the DM can type the table-rolled value
+   *  to amend it. Setter writes the parsed number back to the bound state. */
+  function rollIntoEmptyInput(
+    e: MouseEvent,
+    dice: string | undefined,
+    currentValue: number,
+    setter: (n: number) => void,
+  ) {
+    if (currentValue !== 0) return; // Don't overwrite a typed value
+    if (!dice) return;
+    const result = rollDiceExpression(dice);
+    if (result == null) return;
+    setter(result);
+    // Select after the bound update has flushed so the new digits are highlighted.
+    const input = e.currentTarget as HTMLInputElement;
+    requestAnimationFrame(() => {
+      input.focus();
+      input.select();
+    });
+  }
+
   function setDamageEffects(dmgSource: { dice?: string; type: string }[]) {
     const existingDmg = effects.filter((e) => e.type === "damage") as DamageEffect[];
     const nonDamage = effects.filter((e) => e.type !== "damage");
@@ -594,6 +621,7 @@
       type: "damage",
       amount: existingDmg[i]?.amount ?? 0,
       damageType: d.type,
+      dice: d.dice,
     }));
     effects = [...newDmg, ...nonDamage];
   }
@@ -1154,9 +1182,11 @@
           inputmode="numeric"
           class="dnd-action-input narrow dnd-effect-amount dnd-dmg-number"
           placeholder="dmg"
+          title={effect.dice ? `Double-tap to roll ${effect.dice}` : ""}
           value={effect.amount || ""}
           oninput={(e) => { effect.amount = parseInt((e.target as HTMLInputElement).value, 10) || 0; }}
           onkeydown={(e) => { if (e.key === "Enter") handleCommit(); }}
+          ondblclick={(e) => rollIntoEmptyInput(e, effect.dice, effect.amount, (n) => { effect.amount = n; })}
         />
         <DamageTypeIcon bind:value={effect.damageType} />
         {#if effects.length > 1 || preset === "cast"}
@@ -1304,9 +1334,11 @@
           inputmode="numeric"
           class="dnd-action-input narrow"
           placeholder="dmg"
+          title={dmgEffect?.dice ? `Double-tap to roll ${dmgEffect.dice}` : ""}
           value={riderDamageValues[rider.name] || ""}
           onclick={(e) => e.stopPropagation()}
           oninput={(e) => { riderDamageValues[rider.name] = parseInt((e.target as HTMLInputElement).value, 10) || 0; }}
+          ondblclick={(e) => { e.stopPropagation(); rollIntoEmptyInput(e, dmgEffect?.dice, riderDamageValues[rider.name] ?? 0, (n) => { riderDamageValues[rider.name] = n; }); }}
         />
         {#if dmgType}
           <span class="dnd-rider-dmg-type">{dmgType}</span>
