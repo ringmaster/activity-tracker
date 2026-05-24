@@ -1,5 +1,6 @@
 <script lang="ts">
   import { DAMAGE_ICONS, DAMAGE_TYPES, getDamageIcon, sizeSvg } from "../../icons/damage-icons";
+  import { constrainToViewport } from "../../utils/constrain-to-viewport.svelte";
 
   let { value = $bindable("") }: {
     value: string;
@@ -36,7 +37,7 @@
   </button>
 
   {#if showPicker}
-    <div class="dnd-dmg-type-grid">
+    <div class="dnd-dmg-type-grid" use:constrainToViewport>
       {#each DAMAGE_TYPES as type}
         <button
           class="dnd-dmg-type-option"

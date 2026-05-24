@@ -2,6 +2,7 @@
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction, ZonePosition } from "../../types/encounter";
   import type { Rider } from "../../types/party";
+  import { constrainToViewport } from "../../utils/constrain-to-viewport.svelte";
   import { renderSpellDescription } from "../../utils/spell-renderer";
   import { commitAttack, commitHeal, dropConcentration } from "../../state/action-logger.svelte";
   import { tickCounter } from "../../state/counter-engine.svelte";
@@ -1331,7 +1332,7 @@
       title="Add effect"
     >+</button>
     {#if showEffectPicker}
-      <div class="dnd-dropdown dnd-effect-picker">
+      <div class="dnd-dropdown dnd-effect-picker" use:constrainToViewport>
         <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("damage")}>
           <span class="dnd-via-name">Damage</span>
         </button>
@@ -1514,7 +1515,7 @@
 {/if}
 
 {#if showViaSuggestions && combinedSuggestions.length > 0}
-  <div class="dnd-dropdown" style="max-height: 240px;">
+  <div class="dnd-dropdown" style="max-height: 240px;" use:constrainToViewport>
     {#each combinedSuggestions as action}
       <button
         class="dnd-dropdown-row dnd-via-suggestion"
