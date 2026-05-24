@@ -65,13 +65,17 @@ export function prepareRoster(
     name: p.name,
     type: "pc" as const,
     init: null,
+    // Spread the authored action so all fields survive (range, verb, toHit,
+    // concentration, effects, ...). The dmg mapping preserves any authored
+    // dice string and only falls back to "" when none was given, so PCs that
+    // author dmg dice see them as a hint in the bar without losing fields
+    // like `range` that drive implicit-move suggestions.
     actions: p.actions?.map((a) => ({
-      name: a.name,
-      type: a.type,
-      dmg: a.dmg?.map((d) => ({ dice: "", type: d.type })),
-      save: a.save,
-      note: a.note,
-      slot: a.slot,
+      ...a,
+      dmg: a.dmg?.map((d) => ({
+        dice: (d as any).dice ?? "",
+        type: d.type,
+      })),
     })),
   }));
 
