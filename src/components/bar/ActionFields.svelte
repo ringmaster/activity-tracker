@@ -556,6 +556,7 @@
             _save: ae.save,
             _uses: ae.uses,
             _resetOn: ae.resetOn,
+            _autoRemove: ae.autoRemove,
             _auto: true,
           } as any];
           autoTagIndices = new Set([...autoTagIndices, newIdx]);
@@ -578,6 +579,7 @@
             _dice: ae.dice,
             _save: ae.save,
             _on: ae.on ?? "target",
+            _autoRemove: ae.autoRemove,
             _auto: true,
           } as any];
           autoTagIndices = new Set([...autoTagIndices, effects.length - 1]);
@@ -1071,6 +1073,11 @@
 
         const tagUses = tagAny._uses ? { current: tagAny._uses, max: tagAny._uses } : undefined;
         const tagResetOn = tagAny._resetOn || undefined;
+        // Honor the library-authored autoRemove (on_source_end, when_damaged,
+        // on_save). Without this passthrough, every applied tag was forced
+        // to "manual" and the engine's autoRemove handlers (concentration
+        // cascade, damage sweep, save handlers) never fired.
+        const tagAutoRemove = tagAny._autoRemove ?? "manual";
 
         if (hasDeferredEffect && (effectOn === "self" || effectOn === "enemy" || effectOn === "ally")) {
           // Deferred effect on self/enemy/ally: tag goes on the ACTOR
@@ -1084,7 +1091,7 @@
             note: tagEffect.note || undefined,
             trigger: tagEffect.trigger || undefined,
             onTrigger: tagEffect.note || undefined,
-            autoRemove: "manual",
+            autoRemove: tagAutoRemove,
             castId,
             damageType: tagAny._damageType || undefined,
             dice: tagAny._dice || undefined,
@@ -1105,7 +1112,7 @@
             note: tagEffect.note || undefined,
             trigger: tagEffect.trigger || undefined,
             onTrigger: tagEffect.note || undefined,
-            autoRemove: "manual",
+            autoRemove: tagAutoRemove,
             castId,
             uses: tagUses,
             resetOn: tagResetOn,
@@ -1126,7 +1133,7 @@
               note: tagEffect.note || undefined,
               trigger: tagEffect.trigger || undefined,
               onTrigger: tagEffect.note || undefined,
-              autoRemove: "manual",
+              autoRemove: tagAutoRemove,
               castId,
               uses: tagUses,
               resetOn: tagResetOn,
