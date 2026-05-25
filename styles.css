@@ -1022,6 +1022,15 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   color: var(--text-muted);
 }
 
+.dnd-roster-party-select {
+  min-height: 32px;
+  padding: 2px 8px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+}
+
 /* ---------- Conditions and tag chips ---------- */
 .dnd-condition-chip {
   display: inline-flex;
