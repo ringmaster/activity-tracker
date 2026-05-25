@@ -146,6 +146,7 @@
           name: pc.name,
           init: val,
           actions: pc.actions,
+          spells: pc.spells,
           riders: pc.riders,
           zone: zoneId ? { id: zoneId } : undefined,
         });

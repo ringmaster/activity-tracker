@@ -1,4 +1,4 @@
-import type { ActionEffect, AuthoredDamage, DamageComponent, SaveInfo } from "./encounter";
+import type { ActionEffect, AuthoredDamage, DamageComponent, SaveInfo, Spell } from "./encounter";
 
 export interface PartyAction {
   name: string;
@@ -69,6 +69,14 @@ export interface Rider {
   when?: RiderWhen;
   /** Limited-use cap; absent = unlimited. */
   uses?: RiderUses;
+  /** When tag/condition effects are applied relative to the riding action's
+   *  log entry. "before" reads as setup ("Wex hides (Cunning Action). Wex
+   *  attacks..."); "after" reads as consequence ("Garrick attacked Owlbear...
+   *  Owlbear is prone."). When absent, inferred from effect targets: any
+   *  effect with `on: target` or `on: enemy` defaults to "after"; otherwise
+   *  "before". Damage effects always merge into the action's log entry
+   *  regardless of phase. */
+  phase?: "before" | "after";
   effects: RiderEffect[];
 }
 
@@ -82,6 +90,10 @@ export interface PartyMember {
    *  mechanical reads this. */
   class_level?: string;
   actions?: PartyAction[];
+  /** Spells known by this PC. Strings reference the library (resolved against
+   *  loaded spell library files); objects are inline spell definitions. Both
+   *  surface in the action bar's via dropdown when the cast preset is active. */
+  spells?: (string | Spell)[];
   /** Rider abilities authored on the PC. Each commits as part of an action
    *  via the bar's rider toggles. */
   riders?: Rider[];

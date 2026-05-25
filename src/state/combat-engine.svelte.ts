@@ -1,5 +1,5 @@
 import type { EncounterState } from "./encounter-state.svelte";
-import type { Combatant, CombatAction, ActionEffect, ZonePosition } from "../types/encounter";
+import type { Combatant, CombatAction, ActionEffect, Spell, ZonePosition } from "../types/encounter";
 import type { PartyMember, Rider } from "../types/party";
 import { rollInitiative } from "../utils/dice";
 import { nowTimestamp } from "../utils/time";
@@ -24,6 +24,9 @@ export interface RosterEntry {
    *  "Grapple"); objects are inline authored actions. PCs author either
    *  form, so this needs to accept both. */
   actions?: (string | CombatAction)[];
+  /** PCs only: spells known by this PC, threaded from PartyMember.spells so
+   *  the action bar's via dropdown can surface them under the cast preset. */
+  spells?: (string | Spell)[];
   riders?: Rider[];
   /** Current zone id for this actor; used to seed the roster's zone dropdown.
    *  NPCs carry their authored zone; PCs default to undefined (first zone is
@@ -94,6 +97,7 @@ export function prepareRoster(
             })),
           },
     ),
+    spells: p.spells,
     riders: p.riders,
   }));
 
@@ -105,6 +109,7 @@ export interface PCToAdd {
   name: string;
   init: number;
   actions?: (string | CombatAction)[];
+  spells?: (string | Spell)[];
   riders?: Rider[];
   /** Starting zone selected on the roster screen. If undefined, the first
    *  zone defined on the encounter (if any) is applied as a default. */
@@ -175,6 +180,7 @@ export function startEncounter(
         tags: [],
         concentration: null,
         actions: pc.actions,
+        spells: pc.spells,
         riders: pc.riders,
         rider_uses: initRiderUses(pc.riders),
         action_uses: initActionUses(pc.actions),

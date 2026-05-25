@@ -9,6 +9,7 @@
   import { tickCounter } from "../../state/counter-engine.svelte";
   import { generateSpellTag, generateConcentrationTag } from "../../data/spell-tag-generator";
   import { findLibraryAction, searchLibrary } from "../../state/library-loader";
+  import yaml from "js-yaml";
   import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
   import DamageTypeIcon from "../shared/DamageTypeIcon.svelte";
   import AddTargetForm from "./AddTargetForm.svelte";
@@ -206,7 +207,6 @@
   interface ActionSuggestion {
     name: string;
     authoredDmg?: AuthoredDamage[];
-    spellDmg?: DamageComponent[];
     isSpell?: boolean;
     spellKey?: string;
     conc?: boolean;
@@ -320,10 +320,21 @@
             results.push({ name: entry, isSpell: true });
           }
         } else {
+          // Inline custom spell. The Spell type nominally declares dmg as
+          // DamageComponent[] ({n, type}), but YAML-authored spells write
+          // {dice, type} (AuthoredDamage shape). Normalize to authoredDmg so
+          // the dropdown's `${d.dice} ${d.type}` rendering and selectAction's
+          // damage setup both see consistent fields.
           results.push({
-            name: entry.name, spellDmg: entry.dmg, isSpell: true,
+            name: entry.name,
+            authoredDmg: entry.dmg?.map((d) => ({
+              dice: (d as any).dice ?? "",
+              type: d.type,
+            })),
+            isSpell: true,
             spellKey: (entry.name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-            conc: entry.concentration, verb: entry.verb,
+            conc: entry.concentration,
+            verb: entry.verb,
             actionEffects: entry.effects,
           });
         }
@@ -423,6 +434,19 @@
   let selectedLibAction = $state<CombatAction | null>(null);
 
   function selectAction(action: ActionSuggestion) {
+    if (!action.name || !action.name.trim()) {
+      const sourceYaml = yaml.dump(action.libAction ?? action, {
+        noRefs: true,
+        lineWidth: 120,
+      });
+      console.warn(
+        "[ActionFields] Empty via option selected:\n" +
+          `  source: ${action.source ?? "(none)"}\n` +
+          `  raw suggestion: ${JSON.stringify(action)}\n` +
+          `  libAction YAML:\n${sourceYaml}`,
+        action,
+      );
+    }
     via = action.name;
     isSpell = !!action.isSpell;
     selectedLibAction = action.libAction ?? null;
@@ -459,9 +483,6 @@
           : null;
         if (preset !== "heal") setDamageEffects([{ dice: "", type: action.libAction.damageType }]);
       }
-    } else if (action.spellDmg && action.spellDmg.length > 0) {
-      diceHint = null;
-      if (preset !== "heal") setDamageEffects(action.spellDmg.map((d) => ({ dice: "", type: d.type })));
     } else {
       // Selected action has no damage data; clear the default empty damage
       // chit (added at component init for the "attack" preset) so abilities
@@ -792,11 +813,14 @@
       });
     }
 
-    // --- Rider SETUP phase ---
-    // Apply each active rider's tag/condition effects BEFORE the action commit,
-    // so the prose reads "Wex hides (Cunning Action). Wex attacks ...".
-    // Track applied tags so the CONSUMED phase below can emit effect_ends
-    // and pull them back off after the action.
+    // --- Rider tag/condition phasing ---
+    // "before" riders apply BEFORE the action commit (setup: "Wex hides
+    // (Cunning Action). Wex attacks ..."). "after" riders apply AFTER (the
+    // consequence: "Garrick attacks Owlbear ... Owlbear is prone.").
+    // Default when phase is unset: any tag/condition effect that targets an
+    // opponent (`on: target` or `on: enemy`) makes the rider an "after" by
+    // inference; otherwise "before". Damage effects always merge into the
+    // action's log entry regardless of phase and are handled separately.
     type AppliedRiderTag = {
       riderName: string;
       tagName: string;
@@ -806,77 +830,93 @@
     };
     const appliedRiderTags: AppliedRiderTag[] = [];
 
-    for (const rider of activeRiders) {
-      for (const eff of rider.effects) {
-        if (eff.type === "tag") {
-          const tagName = eff.name ?? rider.name;
-          const on = eff.on ?? "self";
-          const recipients: string[] = [];
-          if (on === "self" || on === "ally") {
-            recipients.push(actor.id);
-          } else {
-            // target/enemy: apply to each selected target
-            for (const t of selectedTargets) recipients.push(t.who);
-          }
-          const ids: string[] = [];
-          for (const rid of recipients) {
-            const c = encounter.getCombatant(rid);
-            if (!c) continue;
-            const tagId = `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-            c.tags.push({
-              id: tagId,
-              name: tagName,
-              source: actor.id,
-              note: eff.note,
-              trigger: (eff.trigger || undefined) as any,
-              onTrigger: eff.note,
-              autoRemove: "manual",
+    function getRiderPhase(rider: Rider): "before" | "after" {
+      if (rider.phase === "before" || rider.phase === "after") return rider.phase;
+      const hasOpponentEffect = rider.effects.some(
+        (e) =>
+          (e.type === "tag" || e.type === "condition") &&
+          (e.on === "target" || e.on === "enemy"),
+      );
+      return hasOpponentEffect ? "after" : "before";
+    }
+
+    function applyRiderTagsAndConditions(riders: Rider[]) {
+      for (const rider of riders) {
+        for (const eff of rider.effects) {
+          if (eff.type === "tag") {
+            const tagName = eff.name ?? rider.name;
+            const on = eff.on ?? "self";
+            const recipients: string[] = [];
+            if (on === "self" || on === "ally") {
+              recipients.push(actor.id);
+            } else {
+              for (const t of selectedTargets) recipients.push(t.who);
+            }
+            const ids: string[] = [];
+            for (const rid of recipients) {
+              const c = encounter.getCombatant(rid);
+              if (!c) continue;
+              const tagId = `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+              c.tags.push({
+                id: tagId,
+                name: tagName,
+                source: actor.id,
+                note: eff.note,
+                trigger: (eff.trigger || undefined) as any,
+                onTrigger: eff.note,
+                autoRemove: "manual",
+              });
+              ids.push(tagId);
+              appliedRiderTags.push({
+                riderName: rider.name,
+                tagName,
+                combatantId: rid,
+                tagId,
+                consumed: !!eff.consumed,
+              });
+            }
+            encounter.logInsert({
+              tag: {
+                by: actor.id,
+                tgt: recipients,
+                name: tagName,
+                note: eff.note,
+                via: rider.name,
+                ids,
+              },
             });
-            ids.push(tagId);
-            appliedRiderTags.push({
-              riderName: rider.name,
-              tagName,
-              combatantId: rid,
-              tagId,
-              consumed: !!eff.consumed,
+          } else if (eff.type === "condition") {
+            const condName = eff.name;
+            if (!condName) continue;
+            const on = eff.on ?? "target";
+            const recipients: string[] = [];
+            if (on === "self" || on === "ally") {
+              recipients.push(actor.id);
+            } else {
+              for (const t of selectedTargets) recipients.push(t.who);
+            }
+            for (const rid of recipients) {
+              const c = encounter.getCombatant(rid);
+              if (!c) continue;
+              if (!c.conditions.includes(condName)) c.conditions.push(condName);
+            }
+            encounter.logInsert({
+              condition: {
+                by: actor.id,
+                tgt: recipients,
+                conditions: [condName],
+                via: rider.name,
+              },
             });
           }
-          encounter.logInsert({
-            tag: {
-              by: actor.id,
-              tgt: recipients,
-              name: tagName,
-              note: eff.note,
-              via: rider.name,
-              ids,
-            },
-          });
-        } else if (eff.type === "condition") {
-          const condName = eff.name;
-          if (!condName) continue;
-          const on = eff.on ?? "target";
-          const recipients: string[] = [];
-          if (on === "self" || on === "ally") {
-            recipients.push(actor.id);
-          } else {
-            for (const t of selectedTargets) recipients.push(t.who);
-          }
-          for (const rid of recipients) {
-            const c = encounter.getCombatant(rid);
-            if (!c) continue;
-            if (!c.conditions.includes(condName)) c.conditions.push(condName);
-          }
-          encounter.logInsert({
-            condition: {
-              by: actor.id,
-              tgt: recipients,
-              conditions: [condName],
-              via: rider.name,
-            },
-          });
         }
       }
     }
+
+    const beforeRiders = activeRiders.filter((r) => getRiderPhase(r) === "before");
+    const afterRiders = activeRiders.filter((r) => getRiderPhase(r) === "after");
+
+    applyRiderTagsAndConditions(beforeRiders);
 
     const isFailed = effects.some((e) => e.type === "failed");
 
@@ -965,6 +1005,12 @@
         actionEffects: learnableEffects.length > 0 ? learnableEffects : undefined,
       });
     }
+
+    // --- Rider AFTER phase ---
+    // Consequence-style riders (Trip Attack's prone, Stunning Strike's
+    // stunned) apply here so they appear immediately below the attack entry
+    // they came from.
+    applyRiderTagsAndConditions(afterRiders);
 
     // Apply healing to targets
     if (totalHeal > 0) {
@@ -1601,10 +1647,6 @@
         {#if action.authoredDmg && action.authoredDmg.length > 0}
           <span class="dnd-via-detail">
             {action.authoredDmg.map((d) => `${d.dice} ${d.type}`.trim()).join(" + ")}
-          </span>
-        {:else if action.spellDmg && action.spellDmg.length > 0}
-          <span class="dnd-via-detail">
-            {action.spellDmg.map((d) => `${d.n} ${d.type}`).join(" + ")}
           </span>
         {:else if action.note}
           <span class="dnd-via-detail">{action.note}</span>
