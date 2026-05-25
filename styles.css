@@ -873,6 +873,35 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   color: var(--text-error);
 }
 
+.dnd-combatant-zone {
+  width: 80px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dnd-combatant-class-level {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.dnd-combatant-row.clickable {
+  cursor: pointer;
+}
+
+.dnd-combatant-row.clickable:hover {
+  background: var(--background-modifier-hover);
+}
+
+.dnd-combatant-row.clickable:active {
+  background: var(--background-modifier-active-hover);
+}
+
 .dnd-combatant-header {
   font-size: 11px;
   font-weight: 600;
