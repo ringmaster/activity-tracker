@@ -162,6 +162,19 @@ export interface AckRungEntry {
   };
 }
 
+/** A single use of a limited-use ability (rider or action) was consumed by
+ *  `by`. The named bucket on `by.action_uses` (kind: "action") or
+ *  `by.rider_uses` (kind: "rider") was decremented by `delta` (default 1).
+ *  Logged so rewind can credit the use back when the entry is undone. */
+export interface ConsumeEntry {
+  consume: {
+    by: string;
+    kind: "rider" | "action";
+    name: string;
+    delta?: number;
+  };
+}
+
 export type LogEntry =
   | StartCombatEntry
   | EndCombatEntry
@@ -181,4 +194,5 @@ export type LogEntry =
   | TagEntry
   | MoveEntry
   | CounterEntry
-  | AckRungEntry;
+  | AckRungEntry
+  | ConsumeEntry;

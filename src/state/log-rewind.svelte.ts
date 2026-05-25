@@ -117,6 +117,18 @@ export function rewindEntry(state: EncounterState, entry: any): boolean {
     return true;
   }
 
+  if (entry.consume) {
+    const c = state.getCombatant(entry.consume.by);
+    if (!c) return false;
+    const delta = entry.consume.delta ?? 1;
+    const bucket = entry.consume.kind === "rider" ? c.rider_uses : c.action_uses;
+    if (bucket && bucket[entry.consume.name]) {
+      const slot = bucket[entry.consume.name];
+      slot.current = Math.min(slot.max, slot.current + delta);
+    }
+    return true;
+  }
+
   // Structural entries (start_combat, end_combat, start_round, start_turn,
   // save, note, remove_combatant, buff, debuff) are no-ops for rewind.
   return false;

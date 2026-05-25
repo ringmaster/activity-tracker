@@ -281,9 +281,15 @@
       for (const entry of actor.actions) {
         if (typeof entry === "string") {
           const resolved = resolveAction(entry);
+          const name = resolved?.name ?? entry;
+          // Drop depleted uses-capped actions so the bar can't select one at 0.
+          const cap = actor.action_uses?.[name];
+          if (cap && cap.current <= 0) continue;
           if (resolved) results.push(resolved);
           else results.push({ name: entry });
         } else if (entry.type !== "multiattack" && entry.type !== "reminder") {
+          const cap = actor.action_uses?.[entry.name];
+          if (cap && cap.current <= 0) continue;
           results.push(actionToSuggestion(entry));
         }
       }
@@ -1143,10 +1149,31 @@
     }
 
     // Decrement rider uses (one per active rider, not per effect).
+    // Each decrement is logged so prevTurn / cascade-delete can credit the
+    // use back, and resetEncounter (which calls rewindAll) restores caps.
     if (actor.rider_uses) {
       for (const rider of activeRiders) {
         const u = actor.rider_uses[rider.name];
-        if (u && u.current > 0) u.current--;
+        if (u && u.current > 0) {
+          u.current--;
+          encounter.logInsert({
+            consume: { by: actor.id, kind: "rider", name: rider.name },
+          });
+        }
+      }
+    }
+
+    // Decrement action uses (Channel Divinity, Action Surge, Second Wind, ...).
+    // The bucket key is the action name; if the chosen `via` has an entry on
+    // action_uses, take one and log it for rewind. Depleted actions are
+    // filtered out of availableActions so the bar can't select one at 0.
+    if (via && actor.action_uses) {
+      const u = actor.action_uses[via];
+      if (u && u.current > 0) {
+        u.current--;
+        encounter.logInsert({
+          consume: { by: actor.id, kind: "action", name: via },
+        });
       }
     }
 

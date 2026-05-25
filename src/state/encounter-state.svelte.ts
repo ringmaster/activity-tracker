@@ -341,6 +341,7 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
   if (partial.turn_hint) base.turn_hint = partial.turn_hint;
   if (partial.riders) base.riders = partial.riders;
   if (partial.rider_uses) base.rider_uses = partial.rider_uses;
+  if (partial.action_uses) base.action_uses = partial.action_uses;
 
   return base;
 }

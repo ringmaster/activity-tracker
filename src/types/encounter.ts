@@ -84,6 +84,10 @@ export interface CombatAction {
   dmg?: AuthoredDamage[];
   save?: SaveInfo;
   area?: string;
+  /** Limited-use cap (Channel Divinity, Action Surge, Second Wind, ...). Same
+   *  shape as the rider RiderUses. `per: turn` resets at the start of the
+   *  actor's turn; `per: encounter` resets only on encounter reset. */
+  uses?: { per: "turn" | "encounter"; count: number };
   /** Structured effects that auto-populate the bar on selection. */
   effects?: ActionEffect[];
   /** Legacy string effect description. */
@@ -133,7 +137,7 @@ export interface CombatTag {
   note?: string;
   trigger?: TagTrigger;
   onTrigger?: string;
-  autoRemove?: "on_save" | "on_source_end" | "manual";
+  autoRemove?: "on_save" | "on_source_end" | "manual" | "when_damaged";
   /** Deferred damage/heal: dice expression for display. */
   dice?: string;
   /** Deferred damage: damage type. */
@@ -190,6 +194,11 @@ export interface Combatant {
    *  encounter start; decremented on commit; reset at start of carrier's
    *  turn when rider.uses.per === "turn". */
   rider_uses?: Record<string, { current: number; max: number }>;
+  /** Runtime use counters per action name. Initialized from action.uses on
+   *  encounter start (resolved from the library for string action refs);
+   *  decremented on commit; reset at start of actor's turn when
+   *  action.uses.per === "turn". */
+  action_uses?: Record<string, { current: number; max: number }>;
 }
 
 /** The authored shape before expansion; `count` triggers multi-combatant generation. */
