@@ -143,6 +143,28 @@ party:
         dmg: [{type: slashing}]
 ```
 
+### Named parties
+
+You can optionally define one or more named parties; subsets of the roster used as a pick-list at encounter start. When at least one is defined, a dropdown appears above the PC list on the encounter-start screen; selecting a party filters the visible rows so you only enter initiative for the PCs actually present.
+
+```yaml
+party:
+  - id: wex
+    ...
+  - id: roice
+    ...
+  - id: emilie
+    ...
+
+parties:
+  - name: Main party
+    members: [wex, roice, emilie]
+  - name: Wex solo
+    members: [wex]
+```
+
+The default selection ("All party members") shows every PC, matching the behavior when no parties are defined. Unknown member ids are ignored.
+
 When a PC uses a new action or spell during combat, it's automatically saved back to the party note for future encounters.
 
 ## The action bar

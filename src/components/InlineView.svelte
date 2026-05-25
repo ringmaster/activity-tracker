@@ -2,7 +2,8 @@
   import type { App } from "obsidian";
   import type { EncounterState } from "../state/encounter-state.svelte";
   import { prepareRoster, startEncounter, type PCToAdd } from "../state/combat-engine.svelte";
-  import { loadParty } from "../state/party-loader";
+  import { loadPartyData } from "../state/party-loader";
+  import type { Party } from "../types/party";
   import InactiveView from "./inline/InactiveView.svelte";
   import ActiveView from "./inline/ActiveView.svelte";
   import RosterConfirm from "./inline/RosterConfirm.svelte";
@@ -17,12 +18,14 @@
   let showRoster = $state(false);
   let rosterNPCs = $state<any[]>([]);
   let rosterPCs = $state<any[]>([]);
+  let rosterParties = $state<Party[]>([]);
 
   async function handleRunEncounter() {
-    const party = await loadParty(app, partyNotePath);
-    const { npcs, pcs } = prepareRoster(encounter, party, app);
+    const { members, parties } = await loadPartyData(app, partyNotePath);
+    const { npcs, pcs } = prepareRoster(encounter, members, app);
     rosterNPCs = npcs;
     rosterPCs = pcs;
+    rosterParties = parties;
     showRoster = true;
   }
 
@@ -45,6 +48,7 @@
     {encounter}
     npcs={rosterNPCs}
     pcs={rosterPCs}
+    parties={rosterParties}
     onStart={handleStart}
     onCancel={handleCancel}
   />

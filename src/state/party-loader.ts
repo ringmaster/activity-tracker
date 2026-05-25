@@ -1,59 +1,72 @@
 import yaml from "js-yaml";
 import type { App, TFile } from "obsidian";
-import type { PartyData, PartyMember, PartyAction } from "../types/party";
+import type { Party, PartyData, PartyMember, PartyAction } from "../types/party";
 
 /**
- * Load the party roster from the configured party note.
- * The note should contain a YAML code block or frontmatter with a `party` array.
+ * Load the party roster + named party groups from the configured party note.
+ * Tries (in order) bare YAML, the first ```yaml code block, and frontmatter.
+ * Returns empty members + empty parties when the file is missing or none
+ * of the formats parse to a `party` array.
  */
+export async function loadPartyData(
+  app: App,
+  partyNotePath: string,
+): Promise<{ members: PartyMember[]; parties: Party[] }> {
+  const file = app.vault.getAbstractFileByPath(partyNotePath);
+  if (!file || !("extension" in file)) return { members: [], parties: [] };
+
+  const content = await app.vault.read(file as TFile);
+  const parsed = parsePartyData(content);
+  if (!parsed) return { members: [], parties: [] };
+
+  const members = parsed.party ?? [];
+  const memberIds = new Set(members.map((m) => m.id));
+  const parties = (parsed.parties ?? [])
+    .filter((p): p is Party => !!p && typeof p.name === "string" && Array.isArray(p.members))
+    .map((p) => ({
+      name: p.name,
+      // Drop ids that don't resolve so a stale party reference can't show a
+      // ghost row at encounter start.
+      members: p.members.filter((id) => memberIds.has(id)),
+    }));
+
+  return { members, parties };
+}
+
+/** Back-compat wrapper kept for call sites that only need the roster. */
 export async function loadParty(
   app: App,
   partyNotePath: string,
 ): Promise<PartyMember[]> {
-  const file = app.vault.getAbstractFileByPath(partyNotePath);
-  if (!file || !("extension" in file)) return [];
+  const { members } = await loadPartyData(app, partyNotePath);
+  return members;
+}
 
-  const content = await app.vault.read(file as TFile);
-
-  // Try parsing the whole file as YAML first (bare YAML file)
+/** Try each supported container format; return the first one that yields a
+ *  party array. Returns null when nothing parses. */
+function parsePartyData(content: string): PartyData | null {
   try {
     const parsed = yaml.load(content) as PartyData;
-    if (parsed?.party && Array.isArray(parsed.party)) {
-      return parsed.party;
-    }
-  } catch {
-    // Not a bare YAML file; try extracting from a code block
-  }
+    if (parsed?.party && Array.isArray(parsed.party)) return parsed;
+  } catch { /* fall through */ }
 
-  // Try extracting from a ```yaml code block
-  const yamlBlockMatch = content.match(
-    /```ya?ml\s*\n([\s\S]*?)```/,
-  );
-  if (yamlBlockMatch) {
+  const blockMatch = content.match(/```ya?ml\s*\n([\s\S]*?)```/);
+  if (blockMatch) {
     try {
-      const parsed = yaml.load(yamlBlockMatch[1]) as PartyData;
-      if (parsed?.party && Array.isArray(parsed.party)) {
-        return parsed.party;
-      }
-    } catch {
-      // Malformed YAML
-    }
+      const parsed = yaml.load(blockMatch[1]) as PartyData;
+      if (parsed?.party && Array.isArray(parsed.party)) return parsed;
+    } catch { /* fall through */ }
   }
 
-  // Try frontmatter
   const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
   if (fmMatch) {
     try {
       const parsed = yaml.load(fmMatch[1]) as PartyData;
-      if (parsed?.party && Array.isArray(parsed.party)) {
-        return parsed.party;
-      }
-    } catch {
-      // Malformed frontmatter
-    }
+      if (parsed?.party && Array.isArray(parsed.party)) return parsed;
+    } catch { /* fall through */ }
   }
 
-  return [];
+  return null;
 }
 
 /**

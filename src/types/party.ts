@@ -83,6 +83,14 @@ export interface PartyMember {
   riders?: Rider[];
 }
 
+/** A named subset of the party roster. `members` lists PartyMember ids in the
+ *  order they should appear when this party is selected at encounter start. */
+export interface Party {
+  name: string;
+  members: string[];
+}
+
 export interface PartyData {
   party: PartyMember[];
+  parties?: Party[];
 }
