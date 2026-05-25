@@ -4,6 +4,10 @@ on:
   push:
     tags:
       - "*"
+  # Run from the Actions UI against any existing tag. Select the tag from
+  # the "Use workflow from" ref dropdown; the release will be created for
+  # that tag. Running against a branch (main) is not useful; pick a tag.
+  workflow_dispatch:
 
 permissions:
   contents: write
