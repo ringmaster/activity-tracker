@@ -3,6 +3,7 @@ import {
   MarkdownPostProcessorContext,
   MarkdownRenderChild,
   MarkdownView,
+  Platform,
   PluginSettingTab,
   App,
   Setting,
@@ -105,6 +106,14 @@ export default class ActivityTrackerPlugin extends Plugin {
 
     this.debug.log(`onload: platform=${navigator.userAgent.includes("Mobile") ? "mobile" : "desktop"}`);
 
+    // Apply a body class on iPhone so styles.css can guarantee a minimum
+    // padding below the notch / Dynamic Island. iPad and desktop are
+    // unaffected; the underlying env(safe-area-inset-top) rule still applies
+    // everywhere and handles the typical case.
+    if (Platform.isIosApp && Platform.isPhone) {
+      document.body.classList.add("dnd-ios-phone");
+    }
+
     // Load actions library
     loadLibrary(this.app, this.settings.libraryPaths);
 
@@ -151,6 +160,8 @@ export default class ActivityTrackerPlugin extends Plugin {
   }
 
   onunload() {
+    document.body.classList.remove("dnd-ios-phone");
+
     // Unmount all inline components
     for (const [el, component] of this.inlineComponents) {
       try {
