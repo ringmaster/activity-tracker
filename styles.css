@@ -996,6 +996,13 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   font-size: 14px;
 }
 
+.dnd-roster-class-level {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: normal;
+}
+
 .dnd-roster-init-input {
   width: 60px;
   min-height: 40px;

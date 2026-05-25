@@ -211,7 +211,12 @@
     </div>
     {#each visiblePcs as pc (pc.id)}
       <div class="dnd-roster-row">
-        <span class="dnd-roster-name">{pc.name}</span>
+        <span class="dnd-roster-name">
+          {pc.name}
+          {#if pc.classLevel}
+            <span class="dnd-roster-class-level">{pc.classLevel}</span>
+          {/if}
+        </span>
         {#if zones.length > 0}
           <select
             class="dnd-roster-zone-select"
