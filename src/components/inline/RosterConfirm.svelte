@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import type { RosterEntry, PCToAdd } from "../../state/combat-engine.svelte";
   import type { Party } from "../../types/party";
@@ -58,7 +59,10 @@
   let guests = $state<{ key: number; name: string; init: string }[]>([]);
 
   // Initialize NPC init + zone values once, and refresh when the NPC list
-  // changes (e.g. encounter swap).
+  // changes (e.g. encounter swap). The zoneSelections merge is wrapped in
+  // untrack so this effect doesn't depend on the very state it's writing to;
+  // otherwise the write retriggers the effect and Svelte aborts the loop with
+  // effect_update_depth_exceeded.
   $effect(() => {
     const inits: Record<string, string> = {};
     const npcZones: Record<string, string> = {};
@@ -67,8 +71,7 @@
       if (npc.zone?.id) npcZones[npc.id] = npc.zone.id;
     }
     npcInits = inits;
-    // Merge rather than replace so PC/guest selections survive an NPC reload.
-    zoneSelections = { ...zoneSelections, ...npcZones };
+    zoneSelections = { ...untrack(() => zoneSelections), ...npcZones };
   });
 
   function zoneFor(id: string): string {
