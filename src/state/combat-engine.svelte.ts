@@ -1,5 +1,5 @@
 import type { EncounterState } from "./encounter-state.svelte";
-import type { Combatant, CombatAction, ActionEffect } from "../types/encounter";
+import type { Combatant, CombatAction, ActionEffect, ZonePosition } from "../types/encounter";
 import type { PartyMember, Rider } from "../types/party";
 import { rollInitiative } from "../utils/dice";
 import { nowTimestamp } from "../utils/time";
@@ -21,6 +21,10 @@ export interface RosterEntry {
   statblock?: string;
   actions?: CombatAction[];
   riders?: Rider[];
+  /** Current zone id for this actor; used to seed the roster's zone dropdown.
+   *  NPCs carry their authored zone; PCs default to undefined (first zone is
+   *  applied if the user doesn't override). */
+  zone?: ZonePosition;
 }
 
 /** Prepare the roster for the encounter start screen. */
@@ -58,6 +62,7 @@ export function prepareRoster(
         init,
         hp: c.hp,
         statblock: c.statblock,
+        zone: c.zone,
       };
     });
 
@@ -90,6 +95,9 @@ export interface PCToAdd {
   init: number;
   actions?: CombatAction[];
   riders?: Rider[];
+  /** Starting zone selected on the roster screen. If undefined, the first
+   *  zone defined on the encounter (if any) is applied as a default. */
+  zone?: ZonePosition;
 }
 
 /** Initialize the rider_uses map from rider.uses caps. */
@@ -104,20 +112,31 @@ function initRiderUses(riders: Rider[] | undefined): Record<string, { current: n
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-/** Start the encounter with the given roster and initiative values. */
+/** Start the encounter with the given roster and initiative values.
+ *  `rosterZones` carries zone-id overrides keyed by combatant id; PCs added
+ *  via `pcsToAdd` already carry their zone via PCToAdd.zone, but if a guest
+ *  or NPC has a different zone selected on the roster screen this map
+ *  applies it after combatants exist. */
 export function startEncounter(
   state: EncounterState,
   rosterInits: Map<string, number>,
   pcsToAdd: PCToAdd[],
+  rosterZones?: Map<string, string>,
 ): void {
+  const defaultZoneId = state.zones[0]?.id;
+
   // Add PCs to combatants
   for (const pc of pcsToAdd) {
     if (!state.combatants.find((c) => c.id === pc.id)) {
+      // Prefer the zone the user picked; otherwise fall back to the first
+      // zone so the move/preposition flow has a starting point.
+      const zone = pc.zone ?? (defaultZoneId ? { id: defaultZoneId } : undefined);
       state.combatants.push({
         id: pc.id,
         name: pc.name,
         type: "pc",
         init: pc.init,
+        zone,
         damage_taken: 0,
         temp_hp: 0,
         conditions: [],
@@ -134,6 +153,15 @@ export function startEncounter(
   for (const [id, init] of rosterInits) {
     const combatant = state.getCombatant(id);
     if (combatant) combatant.init = init;
+  }
+
+  // Apply zone overrides from the roster screen (NPCs whose authored zone
+  // changed, or PCs/guests via the same per-row select).
+  if (rosterZones) {
+    for (const [id, zoneId] of rosterZones) {
+      const combatant = state.getCombatant(id);
+      if (combatant) combatant.zone = { id: zoneId };
+    }
   }
 
   // Set active
