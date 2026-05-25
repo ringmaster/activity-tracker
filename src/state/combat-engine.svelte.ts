@@ -19,7 +19,10 @@ export interface RosterEntry {
   init: number | null;
   hp?: { current: number; max: number };
   statblock?: string;
-  actions?: CombatAction[];
+  /** Mirrors Combatant.actions: strings reference the library by name (e.g.
+   *  "Grapple"); objects are inline authored actions. PCs author either
+   *  form, so this needs to accept both. */
+  actions?: (string | CombatAction)[];
   riders?: Rider[];
   /** Current zone id for this actor; used to seed the roster's zone dropdown.
    *  NPCs carry their authored zone; PCs default to undefined (first zone is
@@ -74,18 +77,22 @@ export function prepareRoster(
     type: "pc" as const,
     init: null,
     classLevel: p.class_level,
-    // Spread the authored action so all fields survive (range, verb, toHit,
-    // concentration, effects, ...). The dmg mapping preserves any authored
-    // dice string and only falls back to "" when none was given, so PCs that
-    // author dmg dice see them as a hint in the bar without losing fields
-    // like `range` that drive implicit-move suggestions.
-    actions: p.actions?.map((a) => ({
-      ...a,
-      dmg: a.dmg?.map((d) => ({
-        dice: (d as any).dice ?? "",
-        type: d.type,
-      })),
-    })),
+    // Strings are library references ("Grapple", "Second Wind") and must pass
+    // through untouched; spreading a string into an object produces character-
+    // indexed keys and loses the name, which then surfaces as a blank "via"
+    // entry. Objects get their authored fields spread (range, verb, toHit,
+    // concentration, effects, ...) with dmg normalized to {dice, type}.
+    actions: p.actions?.map((a) =>
+      typeof a === "string"
+        ? a
+        : {
+            ...a,
+            dmg: a.dmg?.map((d) => ({
+              dice: (d as any).dice ?? "",
+              type: d.type,
+            })),
+          },
+    ),
     riders: p.riders,
   }));
 
@@ -96,7 +103,7 @@ export interface PCToAdd {
   id: string;
   name: string;
   init: number;
-  actions?: CombatAction[];
+  actions?: (string | CombatAction)[];
   riders?: Rider[];
   /** Starting zone selected on the roster screen. If undefined, the first
    *  zone defined on the encounter (if any) is applied as a default. */
