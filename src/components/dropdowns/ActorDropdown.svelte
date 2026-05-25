@@ -178,10 +178,6 @@
     </div>
   {/if}
 
-  <!-- Swap-to list -->
-  <div class="dnd-dropdown-row" style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
-    Swap Actor
-  </div>
   <ul class="dnd-combatant-list">
     {#each encounter.sortedCombatants.filter((c) => c.type !== "object") as combatant (combatant.id)}
       <CombatantRow
