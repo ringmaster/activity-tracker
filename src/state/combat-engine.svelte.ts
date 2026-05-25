@@ -108,6 +108,7 @@ export interface PCToAdd {
   id: string;
   name: string;
   init: number;
+  classLevel?: string;
   actions?: (string | CombatAction)[];
   spells?: (string | Spell)[];
   riders?: Rider[];
@@ -172,6 +173,7 @@ export function startEncounter(
         id: pc.id,
         name: pc.name,
         type: "pc",
+        class_level: pc.classLevel,
         init: pc.init,
         zone,
         damage_taken: 0,

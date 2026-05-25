@@ -1,9 +1,20 @@
 <script lang="ts">
-  import type { Combatant } from "../../types/encounter";
+  import type { Combatant, Zone } from "../../types/encounter";
   import { CONDITION_DESCRIPTIONS } from "../../utils/condition-descriptions";
   import { renderSpellDescription } from "../../utils/spell-renderer";
 
-  let { combatant, isCurrent = false }: { combatant: Combatant; isCurrent?: boolean } = $props();
+  let { combatant, isCurrent = false, onSelect, showZone = false, zones }: {
+    combatant: Combatant;
+    isCurrent?: boolean;
+    /** When provided, the row becomes tappable and invokes this with the
+     *  combatant id. Used by the actor dropdown's swap list. */
+    onSelect?: (id: string) => void;
+    /** Swap the init column for a zone column. */
+    showZone?: boolean;
+    /** Zones to resolve zone.id to a display name. Only consulted when
+     *  showZone is true. */
+    zones?: Zone[];
+  } = $props();
 
   let isDead = $derived(combatant.conditions.includes("dead"));
   let isFled = $derived(combatant.conditions.includes("fled"));
@@ -50,15 +61,57 @@
   let acDisplay = $derived(
     combatant.ac != null ? String(combatant.ac) : "-",
   );
+
+  /** Resolve a zone id to its display name; falls back to the id if no zones
+   *  array was provided. */
+  let zoneDisplay = $derived.by(() => {
+    if (!combatant.zone?.id) return "-";
+    const z = zones?.find((zone) => zone.id === combatant.zone?.id);
+    return z?.name ?? combatant.zone.id;
+  });
+
+  /** Visible conditions = everything except the dead/fled special cases,
+   *  which get their own DEAD/FLED tags. */
+  let visibleConditions = $derived(
+    (combatant.conditions ?? []).filter((c) => c !== "dead" && c !== "fled"),
+  );
+
+  /** True when at least one status pill (DEAD/FLED, condition, tag) is
+   *  showing. Suppresses class_level when true, per the design that pills
+   *  and class_level fill the same slot. */
+  let hasStatus = $derived(
+    isDead ||
+      isFled ||
+      visibleConditions.length > 0 ||
+      (combatant.tags?.length ?? 0) > 0,
+  );
+
+  function handleClick() {
+    if (onSelect) onSelect(combatant.id);
+  }
+
+  function handleKey(e: KeyboardEvent) {
+    if (!onSelect) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onSelect(combatant.id);
+    }
+  }
 </script>
 
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <li
   class="dnd-combatant-row"
   class:current={isCurrent}
   class:dead={isDead}
   class:fled={isFled}
+  class:clickable={!!onSelect}
+  onclick={onSelect ? handleClick : undefined}
+  onkeydown={onSelect ? handleKey : undefined}
+  tabindex={onSelect ? 0 : undefined}
 >
-  <span class="dnd-combatant-caret">{isCurrent ? "\u25B6" : ""}</span>
+  <span class="dnd-combatant-caret">{isCurrent ? "▶" : ""}</span>
   <span class="dnd-combatant-name">
     {combatant.name}
     {#if isDead}
@@ -66,7 +119,7 @@
     {:else if isFled}
       <span class="dnd-combatant-tag fled">FLED</span>
     {/if}
-    {#each (combatant.conditions ?? []).filter(c => c !== "dead" && c !== "fled") as cond}
+    {#each visibleConditions as cond}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <span
         class="dnd-condition-chip"
@@ -77,8 +130,15 @@
     {#each (combatant.tags ?? []) as tag (tag.id)}
       <span class="dnd-tag-chip" title={tag.note ?? ""}>{tag.name}</span>
     {/each}
+    {#if !hasStatus && combatant.class_level}
+      <span class="dnd-combatant-class-level">{combatant.class_level}</span>
+    {/if}
   </span>
-  <span class="dnd-combatant-init">{initDisplay}</span>
+  {#if showZone}
+    <span class="dnd-combatant-zone">{zoneDisplay}</span>
+  {:else}
+    <span class="dnd-combatant-init">{initDisplay}</span>
+  {/if}
   <span class="dnd-combatant-ac">{acDisplay}</span>
   <span class="dnd-combatant-hp" class:bloodied={isBloodied}>{hpDisplay}</span>
 </li>

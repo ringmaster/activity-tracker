@@ -3,6 +3,7 @@
   import type { Combatant, Counter, LadderRung } from "../../types/encounter";
   import { addCombatant, endEncounter } from "../../state/combat-engine.svelte";
   import { tickCounter } from "../../state/counter-engine.svelte";
+  import CombatantRow from "../inline/CombatantRow.svelte";
 
   let { encounter, onClose }: {
     encounter: EncounterState;
@@ -181,25 +182,17 @@
   <div class="dnd-dropdown-row" style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
     Swap Actor
   </div>
-  {#each encounter.sortedCombatants.filter((c) => c.type !== "object") as combatant (combatant.id)}
-    <button
-      class="dnd-dropdown-row"
-      class:current={combatant.id === encounter.currentTurn}
-      onclick={() => swapTo(combatant.id)}
-    >
-      <span class="dnd-combatant-name">
-        {combatant.name}
-        {#if combatant.conditions.includes("dead")}
-          <span class="dnd-combatant-tag">DEAD</span>
-        {/if}
-      </span>
-      {#if combatant.type === "npc" && combatant.hp}
-        <span style="font-size: 12px; color: var(--text-muted);">
-          {combatant.hp.current}/{combatant.hp.max}
-        </span>
-      {/if}
-    </button>
-  {/each}
+  <ul class="dnd-combatant-list">
+    {#each encounter.sortedCombatants.filter((c) => c.type !== "object") as combatant (combatant.id)}
+      <CombatantRow
+        {combatant}
+        isCurrent={combatant.id === encounter.currentTurn}
+        onSelect={swapTo}
+        showZone={true}
+        zones={encounter.zones}
+      />
+    {/each}
+  </ul>
 
   <!-- Add combatant -->
   {#if !showAddForm}

@@ -145,6 +145,7 @@
           id: pc.id,
           name: pc.name,
           init: val,
+          classLevel: pc.classLevel,
           actions: pc.actions,
           spells: pc.spells,
           riders: pc.riders,

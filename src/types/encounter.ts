@@ -160,6 +160,10 @@ export interface Combatant {
   id: string;
   name: string;
   type: "npc" | "pc" | "object";
+  /** Free-text class/level summary shown beside the name (e.g. "Cleric 3"
+   *  or "Rogue 2/Cleric 7/Monk 4"). Display-only; nothing mechanical reads
+   *  it. Plumbed from PartyMember.class_level for PCs; NPCs typically omit. */
+  class_level?: string;
   zone?: ZonePosition;
   statblock?: string;
   init: number | null;
@@ -206,6 +210,7 @@ export interface AuthoredCombatant {
   id?: string;
   name: string;
   type: "npc" | "pc" | "object";
+  class_level?: string;
   zone?: ZonePosition;
   statblock?: string;
   init?: number | null;
