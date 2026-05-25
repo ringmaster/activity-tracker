@@ -7,6 +7,19 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* iOS notch / Dynamic Island: keep the bar tappable below the safe area.
+     env() returns 0 on desktop and most iPads; the body.dnd-ios-phone rule
+     below guarantees a minimum push-down on iPhones where viewport-fit
+     might not populate env() with the real inset. */
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+body.dnd-ios-phone .dnd-combat-bar-container {
+  /* Fallback for iPhones where env(safe-area-inset-top) isn't populated by
+     the webview viewport setup. 44px covers the classic notch; max() means
+     Dynamic-Island devices (which usually report a larger inset) still get
+     the correct safe-area distance. */
+  padding-top: max(env(safe-area-inset-top, 0px), 44px);
 }
 
 /* ---------- Touch target baseline ---------- */
