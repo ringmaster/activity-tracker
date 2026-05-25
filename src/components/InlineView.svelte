@@ -32,8 +32,9 @@
   function handleStart(
     inits: Map<string, number>,
     pcsToAdd: PCToAdd[],
+    zones: Map<string, string>,
   ) {
-    startEncounter(encounter, inits, pcsToAdd);
+    startEncounter(encounter, inits, pcsToAdd, zones);
     showRoster = false;
     encounter.flushNow();
   }
