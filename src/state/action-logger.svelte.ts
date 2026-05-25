@@ -283,6 +283,21 @@ function applyDamage(state: EncounterState, targetId: string, amount: number): v
   if (isConcentrating && !(combatant.conditions ?? []).includes("dead") && remaining > 0) {
     triggerConcentrationSave(state, targetId, remaining);
   }
+
+  // Sweep any tags on this target that author autoRemove: when_damaged
+  // (Turn Undead's "Turned" tag, frightened riders that break on damage, ...).
+  // Only fires when damage actually landed (remaining > 0 after temp HP).
+  if (remaining > 0) {
+    const removed = (combatant.tags ?? []).filter((t) => t.autoRemove === "when_damaged");
+    if (removed.length > 0) {
+      combatant.tags = combatant.tags.filter((t) => t.autoRemove !== "when_damaged");
+      for (const t of removed) {
+        state.logInsert({
+          effect_ends: { what: t.name, on: targetId, reason: "damaged" },
+        });
+      }
+    }
+  }
 }
 
 function triggerConcentrationSave(

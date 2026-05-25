@@ -9,6 +9,7 @@ function isOutOfCombat(c: Combatant): boolean {
   return c.type === "object" || c.conditions.includes("dead") || c.conditions.includes("fled");
 }
 import { getCreature } from "./statblocks-api";
+import { findLibraryAction } from "./library-loader";
 import { rewindAll } from "./log-rewind.svelte";
 import type { App } from "obsidian";
 
@@ -122,6 +123,27 @@ function initRiderUses(riders: Rider[] | undefined): Record<string, { current: n
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/** Initialize the action_uses map from action.uses caps. String entries are
+ *  library references; resolve them against the cached library to find the
+ *  uses cap. Returns undefined when no action carries a use cap. */
+function initActionUses(
+  actions: (string | CombatAction)[] | undefined,
+): Record<string, { current: number; max: number }> | undefined {
+  if (!actions || actions.length === 0) return undefined;
+  const out: Record<string, { current: number; max: number }> = {};
+  for (const a of actions) {
+    if (typeof a === "string") {
+      const lib = findLibraryAction(a);
+      if (lib?.uses?.count != null) {
+        out[lib.name] = { current: lib.uses.count, max: lib.uses.count };
+      }
+    } else if (a.uses?.count != null) {
+      out[a.name] = { current: a.uses.count, max: a.uses.count };
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 /** Start the encounter with the given roster and initiative values.
  *  `rosterZones` carries zone-id overrides keyed by combatant id; PCs added
  *  via `pcsToAdd` already carry their zone via PCToAdd.zone, but if a guest
@@ -155,8 +177,18 @@ export function startEncounter(
         actions: pc.actions,
         riders: pc.riders,
         rider_uses: initRiderUses(pc.riders),
+        action_uses: initActionUses(pc.actions),
       });
     }
+  }
+
+  // Seed action_uses for authored NPCs/objects too. They didn't go through
+  // pcsToAdd, but their YAML actions can also carry `uses:` caps now.
+  for (const c of state.combatants) {
+    if (c.type === "pc") continue;
+    if (c.action_uses) continue;
+    const seeded = initActionUses(c.actions);
+    if (seeded) c.action_uses = seeded;
   }
 
   // Apply initiative overrides from roster
@@ -317,6 +349,18 @@ export function nextTurn(state: EncounterState): void {
     for (const r of actor.riders) {
       if (r.uses?.per === "turn" && actor.rider_uses[r.name]) {
         actor.rider_uses[r.name].current = actor.rider_uses[r.name].max;
+      }
+    }
+  }
+
+  // Reset per-turn action uses (e.g. abilities that recharge each turn).
+  // String action refs are resolved against the library to find the cap.
+  if (actor.actions && actor.action_uses) {
+    for (const a of actor.actions) {
+      const resolved = typeof a === "string" ? findLibraryAction(a) : a;
+      if (!resolved) continue;
+      if (resolved.uses?.per === "turn" && actor.action_uses[resolved.name]) {
+        actor.action_uses[resolved.name].current = actor.action_uses[resolved.name].max;
       }
     }
   }
