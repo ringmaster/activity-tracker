@@ -47,7 +47,8 @@
     } else {
       encounter.swappedActor = id;
     }
-    onClose();
+    // Dropdown stays open so the user can see the swap-caret update and pick
+    // a different actor without re-opening it.
   }
 
   function handleAdd() {
