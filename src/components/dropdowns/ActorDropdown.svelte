@@ -187,6 +187,7 @@
       <CombatantRow
         {combatant}
         isCurrent={combatant.id === encounter.currentTurn}
+        isSwapped={combatant.id === encounter.swappedActor}
         onSelect={swapTo}
         showZone={true}
         zones={encounter.zones}

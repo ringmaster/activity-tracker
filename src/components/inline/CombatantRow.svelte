@@ -3,9 +3,14 @@
   import { CONDITION_DESCRIPTIONS } from "../../utils/condition-descriptions";
   import { renderSpellDescription } from "../../utils/spell-renderer";
 
-  let { combatant, isCurrent = false, onSelect, showZone = false, zones }: {
+  let { combatant, isCurrent = false, isSwapped = false, onSelect, showZone = false, zones }: {
     combatant: Combatant;
     isCurrent?: boolean;
+    /** True when the dropdown has manually swapped the active actor to this
+     *  combatant (i.e. encounter.swappedActor === combatant.id and the
+     *  actor differs from currentTurn). Renders an outlined caret distinct
+     *  from the solid current-turn caret. Mutually exclusive with isCurrent. */
+    isSwapped?: boolean;
     /** When provided, the row becomes tappable and invokes this with the
      *  combatant id. Used by the actor dropdown's swap list. */
     onSelect?: (id: string) => void;
@@ -111,7 +116,7 @@
   onkeydown={onSelect ? handleKey : undefined}
   tabindex={onSelect ? 0 : undefined}
 >
-  <span class="dnd-combatant-caret">{isCurrent ? "▶" : ""}</span>
+  <span class="dnd-combatant-caret" class:swapped={!isCurrent && isSwapped}>{isCurrent ? "▶" : isSwapped ? "▷" : ""}</span>
   <span class="dnd-combatant-name">
     {combatant.name}
     {#if isDead}

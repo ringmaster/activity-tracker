@@ -833,6 +833,12 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   color: var(--interactive-accent);
 }
 
+.dnd-combatant-caret.swapped {
+  font-weight: 400;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
 .dnd-combatant-name {
   flex: 1;
   overflow: hidden;
