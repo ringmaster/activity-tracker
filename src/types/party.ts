@@ -77,6 +77,10 @@ export interface PartyMember {
   name: string;
   player?: string;
   notes?: string;
+  /** Free-text class/level summary shown beside the PC's name on the roster
+   *  (e.g. "Cleric 3" or "Rogue 2/Cleric 7/Monk 4"). Display-only; nothing
+   *  mechanical reads this. */
+  class_level?: string;
   actions?: PartyAction[];
   /** Rider abilities authored on the PC. Each commits as part of an action
    *  via the bar's rider toggles. */

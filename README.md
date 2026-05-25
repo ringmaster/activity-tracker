@@ -124,7 +124,7 @@ party:
   - id: wex
     name: Wex
     player: Owen
-    notes: "Rogue, 5th"
+    class_level: "Rogue 5"
     actions:
       - name: Shortsword
         type: attack
@@ -136,12 +136,14 @@ party:
   - id: roice
     name: Roice
     player: Joe
-    notes: "Fighter, 5th"
+    class_level: "Fighter 3/Cleric 2"
     actions:
       - name: Glaive
         type: attack
         dmg: [{type: slashing}]
 ```
+
+`class_level` is a free-text display field shown beside the PC's name on the roster screen (e.g. "Cleric 3" or "Rogue 2/Cleric 7/Monk 4"). It's purely cosmetic; nothing mechanical reads it.
 
 ### Named parties
 

@@ -25,6 +25,8 @@ export interface RosterEntry {
    *  NPCs carry their authored zone; PCs default to undefined (first zone is
    *  applied if the user doesn't override). */
   zone?: ZonePosition;
+  /** PCs only: display-only class/level summary surfaced beside the name. */
+  classLevel?: string;
 }
 
 /** Prepare the roster for the encounter start screen. */
@@ -71,6 +73,7 @@ export function prepareRoster(
     name: p.name,
     type: "pc" as const,
     init: null,
+    classLevel: p.class_level,
     // Spread the authored action so all fields survive (range, verb, toHit,
     // concentration, effects, ...). The dmg mapping preserves any authored
     // dice string and only falls back to "" when none was given, so PCs that
