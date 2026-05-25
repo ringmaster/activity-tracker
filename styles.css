@@ -20,6 +20,13 @@ body.dnd-ios-phone .dnd-combat-bar-container {
      Dynamic-Island devices (which usually report a larger inset) still get
      the correct safe-area distance. */
   padding-top: max(env(safe-area-inset-top, 0px), 44px);
+  /* Obsidian's iPhone UI floats a sidebar-toggle button at the top-left and
+     the edit / more-options buttons at the top-right, on top of the content
+     area. Clear those zones so the plugin's bar buttons aren't sitting
+     under Obsidian's controls. Asymmetric because the right side has two
+     stacked buttons (~88px) and the left has one (~48px). */
+  padding-left: 56px;
+  padding-right: 96px;
 }
 
 /* ---------- Touch target baseline ---------- */
