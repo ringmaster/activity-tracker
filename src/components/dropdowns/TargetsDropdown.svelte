@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
-  import { TARGET_TYPE_ICONS_INLINE } from "../../icons/target-icons";
+  import { ALLEGIANCE_ICONS } from "../../icons/target-icons";
 
   let {
     encounter,
@@ -157,14 +157,21 @@
         <span
           class="dnd-friendly-toggle dnd-friendly-toggle-static"
           title="Object"
-        >{@html TARGET_TYPE_ICONS_INLINE.object}</span>
+        >{@html ALLEGIANCE_ICONS.object}</span>
       {:else}
+        <!-- Icon encodes allegiance relative to the current actor: shield
+             when this combatant is on the actor's side (don't attack;
+             defend), swords when they're on the other side (attack
+             these). Clicking still toggles `friendly` on the target; the
+             icon flips with the new state. When the actor swaps, every
+             row's icon re-derives because isFriendly() depends on the
+             actor's type too. -->
         <button
           class="dnd-friendly-toggle"
           class:friendly={isFriendly(combatant)}
           title={isFriendly(combatant) ? "Ally (tap to mark hostile)" : "Enemy (tap to mark friendly)"}
           onclick={() => toggleFriendly(combatant.id)}
-        >{@html combatant.type === "pc" ? TARGET_TYPE_ICONS_INLINE.pc : TARGET_TYPE_ICONS_INLINE.npc}</button>
+        >{@html isFriendly(combatant) ? ALLEGIANCE_ICONS.ally : ALLEGIANCE_ICONS.enemy}</button>
       {/if}
       <button
         class="dnd-target-name"
