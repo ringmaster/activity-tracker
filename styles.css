@@ -1230,44 +1230,61 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   background: var(--background-secondary);
 }
 
+/* Friendly toggle: 40px square with 8px of explicit padding all around.
+ * The padding gives the button visible substance on desktop (previously
+ * its bounds hugged the icon and the affordance read as decorative
+ * rather than tappable) AND reserves space for the icon on iPad, where
+ * iOS 26's native button padding was filling the visual area without
+ * letting the SVG render at a useful size. The icon sits at 24px in the
+ * remaining inner box. !important on min-height beats the bar-button
+ * baseline of 44px since this is an inline indicator, not a primary
+ * action. */
 .dnd-friendly-toggle {
-  min-width: 24px !important;
-  min-height: 24px !important;
-  width: 24px;
-  height: 24px;
-  padding: 0;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  width: 40px;
+  height: 40px;
+  padding: 8px !important;
   border: none;
   background: none;
-  font-size: 14px;
   cursor: pointer;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
+  overflow: visible;
+  box-sizing: border-box;
 }
 
-/* The friendly toggle now hosts a type-icon SVG; the inherited svg color
- * follows the wrapper's `color`. Friendly state tints it (accent for
- * allies). The static variant (objects) drops cursor: pointer and any
- * hover affordance. */
 .dnd-friendly-toggle svg {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   display: block;
+  overflow: visible;
 }
 
+/* Explicit fill rather than currentColor: iOS 26 WebKit doesn't
+ * consistently propagate currentColor into inline-html SVG children of
+ * a button with appearance: none, so the icon went invisible. Pinning
+ * the path's fill directly bypasses that resolution path. */
 .dnd-friendly-toggle svg path,
 .dnd-friendly-toggle svg g {
-  fill: currentColor;
+  fill: var(--text-muted);
 }
 
-.dnd-friendly-toggle.friendly {
-  color: var(--interactive-accent);
+.dnd-friendly-toggle.friendly svg path,
+.dnd-friendly-toggle.friendly svg g {
+  fill: var(--interactive-accent);
 }
 
 .dnd-friendly-toggle-static {
   cursor: default;
+}
+
+.dnd-friendly-toggle-static svg path,
+.dnd-friendly-toggle-static svg g {
+  fill: var(--text-muted);
 }
 
 .dnd-target-hp {
