@@ -1953,24 +1953,46 @@ body.dnd-ios-phone .dnd-combat-bar-container {
 /* "statblock" button beside the current-actor's name. Compact pill --
  * it's a quick lookup affordance, not a primary control, so it stays
  * smaller than the surrounding bar/end buttons. */
+/* Statblock button: an ID-card glyph that opens the Fantasy Statblocks
+ * creature pane. Used both in the actor dropdown (beside the active
+ * actor's name) and in target rows (after the name button). */
 .dnd-statblock-open-btn {
-  min-height: 22px !important;
-  min-width: 0 !important;
-  padding: 1px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
+  min-height: 28px !important;
+  min-width: 28px !important;
+  width: 28px;
+  height: 28px;
+  padding: 4px !important;
   background: var(--background-secondary);
   color: var(--text-muted);
   border: 1px solid var(--background-modifier-border);
   border-radius: 4px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.dnd-statblock-open-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.dnd-statblock-open-btn svg path,
+.dnd-statblock-open-btn svg g {
+  fill: var(--text-muted);
 }
 
 .dnd-statblock-open-btn:hover {
   background: var(--background-modifier-hover);
   color: var(--text-normal);
+}
+
+.dnd-statblock-open-btn:hover svg path,
+.dnd-statblock-open-btn:hover svg g {
+  fill: var(--text-normal);
 }
 
 .dnd-add-confirm {

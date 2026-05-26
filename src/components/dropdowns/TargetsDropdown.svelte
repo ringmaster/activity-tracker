@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
-  import { ALLEGIANCE_ICONS } from "../../icons/target-icons";
+  import { ALLEGIANCE_ICONS, STATBLOCK_ICON } from "../../icons/target-icons";
+  import { getCreature, openStatblockView } from "../../state/statblocks-api";
 
   let {
     encounter,
@@ -127,6 +128,18 @@
     }
   }
 
+  /** True when the target has a statblock that the FS bestiary can
+   *  resolve -- gates rendering of the per-row statblock button. */
+  function canOpenStatblock(c: typeof encounter.combatants[0]): boolean {
+    if (!c.statblock) return false;
+    return !!getCreature(encounter.app, c.statblock);
+  }
+
+  function openTargetStatblock(c: typeof encounter.combatants[0]) {
+    if (!c.statblock) return;
+    openStatblockView(encounter.app, c.statblock);
+  }
+
   /** Toggle every living combatant in a zone: check all if any unchecked, else uncheck all. */
   function toggleZone(group: ZoneGroup) {
     const living = group.combatants.filter((c) => !(c.conditions ?? []).includes("dead"));
@@ -200,6 +213,19 @@
           <span class="dnd-tag-chip" title={tag.note ?? ""}>{tag.name}</span>
         {/each}
       </button>
+
+      {#if canOpenStatblock(combatant)}
+        <!-- Sits directly right of the name (the selection button) and
+             before the outcome radios. Opens the Fantasy Statblocks
+             creature pane for this target without changing selection. -->
+        <button
+          type="button"
+          class="dnd-statblock-open-btn"
+          onclick={(e) => { e.stopPropagation(); openTargetStatblock(combatant); }}
+          title="Open {combatant.statblock} statblock in the sidebar"
+          aria-label="Open {combatant.statblock} statblock"
+        >{@html STATBLOCK_ICON}</button>
+      {/if}
 
       {#if sel.checked}
         <div class="dnd-outcome-radios">

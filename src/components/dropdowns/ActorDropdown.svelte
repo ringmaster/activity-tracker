@@ -11,6 +11,7 @@
     reviveFromDeathSaves,
   } from "../../state/action-logger.svelte";
   import { getCreature, getCreatureNames, openStatblockView } from "../../state/statblocks-api";
+  import { STATBLOCK_ICON } from "../../icons/target-icons";
 
   // Combatants holding an unfired readied action. Surfaced as resume buttons
   // near the counters so the DM can fire from anyone's turn without first
@@ -235,7 +236,8 @@
                 class="dnd-statblock-open-btn"
                 onclick={openActorStatblock}
                 title="Open {actor.statblock} statblock in the sidebar"
-              >statblock</button>
+                aria-label="Open {actor.statblock} statblock"
+              >{@html STATBLOCK_ICON}</button>
             {/if}
           </div>
           <div style="font-size: 13px; color: var(--text-muted);">

@@ -3,6 +3,7 @@ import hydra from "./hydra-sharp-solid-full.svg";
 import box from "./box-sharp-solid-full.svg";
 import shieldHalved from "./shield-halved-sharp-solid-full.svg";
 import swords from "./swords-sharp-solid-full.svg";
+import monsterIdCard from "./monster-id-card.svg";
 
 function sized(svg: string, size: number): string {
   return svg.replace("<svg", `<svg width="${size}" height="${size}"`);
@@ -35,3 +36,8 @@ export const ALLEGIANCE_ICONS = {
   enemy: unsized(swords),
   object: unsized(box),
 };
+
+/** ID-card glyph used on the "open statblock" button. Appears next to the
+ *  current actor's name in the actor dropdown and on each target row that
+ *  has a `statblock` reference. */
+export const STATBLOCK_ICON = unsized(monsterIdCard);
