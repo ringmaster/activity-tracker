@@ -58,5 +58,4 @@ combatants:
       notes: |
         Lizardman 1 carries the reliquary; the other two screen for it.
         If the carrier drops, the nearest survivor scoops it up and keeps running.
-        They are at home in the water -- a collapsed bridge slows the party more than them.
 ```

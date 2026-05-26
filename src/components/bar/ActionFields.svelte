@@ -409,11 +409,21 @@
     return range === "touch" || range === "5 feet" || range === "5 ft";
   });
 
-  /** Auto-suggested implicit move: first checked target whose zone differs from actor's. */
+  /** Auto-suggested implicit move: first checked target whose zone differs
+   *  from actor's.
+   *
+   *  Skipped when the actor isn't the current turn holder -- the bar's
+   *  being driven by someone the DM swapped to mid-turn, which almost
+   *  always means an opportunity attack (reaction, not a movement action).
+   *  AoOs by definition can't include a move, so the implicit-move pill
+   *  would just clutter the bar with a chip the DM has to dismiss every
+   *  time. The DM can still add a move manually via the + menu if they
+   *  meant something else (a held action firing, say). */
   let suggestedImplicitMove = $derived.by((): ZonePosition | null => {
     const actor = encounter.effectiveActor;
     if (!actor?.zone) return null;
     if (!requiresMelee) return null;
+    if (actor.id !== encounter.currentTurn) return null;
     for (const id of checkedTargetIds) {
       const c = encounter.getCombatant(id);
       if (c?.zone && c.zone.id !== actor.zone.id) {
