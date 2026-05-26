@@ -97,6 +97,16 @@ export interface PartyMember {
   /** Rider abilities authored on the PC. Each commits as part of an action
    *  via the bar's rider toggles. */
   riders?: Rider[];
+  /** True when this party member is an ally / companion rather than a PC
+   *  (Whisper, hirelings, summoned creatures with persistent presence,
+   *  etc.). At encounter start the resulting combatant is created as
+   *  type: "npc" with friendly: true and an hp pool from `max_hp`, instead
+   *  of a PC with cumulative damage_taken. PC death saves don't apply --
+   *  allies follow the NPC auto-death path. */
+  is_ally?: boolean;
+  /** Maximum HP for ally party members. Required when `is_ally` is true;
+   *  ignored for regular PCs (who track cumulative damage). */
+  max_hp?: number;
 }
 
 /** A named subset of the party roster. `members` lists PartyMember ids in the

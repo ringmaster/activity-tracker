@@ -34,6 +34,11 @@ export interface RosterEntry {
   zone?: ZonePosition;
   /** PCs only: display-only class/level summary surfaced beside the name. */
   classLevel?: string;
+  /** Ally party member (Whisper et al). When true, startEncounter pushes the
+   *  combatant as type: "npc" with friendly: true and an hp pool from
+   *  `maxHp`, instead of a PC with cumulative damage_taken. */
+  isAlly?: boolean;
+  maxHp?: number;
 }
 
 /** Prepare the roster for the encounter start screen. */
@@ -118,6 +123,8 @@ export function prepareRoster(
     ),
     spells: p.spells,
     riders: p.riders,
+    isAlly: p.is_ally,
+    maxHp: p.max_hp,
   }));
 
   return { npcs, pcs };
@@ -134,6 +141,10 @@ export interface PCToAdd {
   /** Starting zone selected on the roster screen. If undefined, the first
    *  zone defined on the encounter (if any) is applied as a default. */
   zone?: ZonePosition;
+  /** Push this as an ally (NPC + friendly: true with an hp pool) instead
+   *  of a PC with cumulative damage_taken. Requires maxHp. */
+  isAlly?: boolean;
+  maxHp?: number;
 }
 
 /** Initialize the rider_uses map from rider.uses caps. */
@@ -182,30 +193,57 @@ export function startEncounter(
 ): void {
   const defaultZoneId = state.zones[0]?.id;
 
-  // Add PCs to combatants
+  // Add PCs (and PC-authored allies) to combatants
   for (const pc of pcsToAdd) {
     if (!state.combatants.find((c) => c.id === pc.id)) {
       // Prefer the zone the user picked; otherwise fall back to the first
       // zone so the move/preposition flow has a starting point.
       const zone = pc.zone ?? (defaultZoneId ? { id: defaultZoneId } : undefined);
-      state.combatants.push({
-        id: pc.id,
-        name: pc.name,
-        type: "pc",
-        class_level: pc.classLevel,
-        init: pc.init,
-        zone,
-        damage_taken: 0,
-        temp_hp: 0,
-        conditions: [],
-        tags: [],
-        concentration: null,
-        actions: pc.actions,
-        spells: pc.spells,
-        riders: pc.riders,
-        rider_uses: initRiderUses(pc.riders),
-        action_uses: initActionUses(pc.actions),
-      });
+      if (pc.isAlly) {
+        // Ally companions (Whisper, hirelings, persistent summons) are pushed
+        // as friendly NPCs so they get an hp pool that drains with damage
+        // rather than the PC death-save flow. maxHp falls back to 1 if the
+        // YAML forgot it -- not great, but better than a crashy 0.
+        const maxHp = pc.maxHp ?? 1;
+        state.combatants.push({
+          id: pc.id,
+          name: pc.name,
+          type: "npc",
+          class_level: pc.classLevel,
+          init: pc.init,
+          zone,
+          hp: { current: maxHp, max: maxHp },
+          temp_hp: 0,
+          conditions: [],
+          tags: [],
+          concentration: null,
+          friendly: true,
+          actions: pc.actions,
+          spells: pc.spells,
+          riders: pc.riders,
+          rider_uses: initRiderUses(pc.riders),
+          action_uses: initActionUses(pc.actions),
+        });
+      } else {
+        state.combatants.push({
+          id: pc.id,
+          name: pc.name,
+          type: "pc",
+          class_level: pc.classLevel,
+          init: pc.init,
+          zone,
+          damage_taken: 0,
+          temp_hp: 0,
+          conditions: [],
+          tags: [],
+          concentration: null,
+          actions: pc.actions,
+          spells: pc.spells,
+          riders: pc.riders,
+          rider_uses: initRiderUses(pc.riders),
+          action_uses: initActionUses(pc.actions),
+        });
+      }
     }
   }
 

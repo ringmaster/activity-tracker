@@ -150,6 +150,8 @@
           spells: pc.spells,
           riders: pc.riders,
           zone: zoneId ? { id: zoneId } : undefined,
+          isAlly: pc.isAlly,
+          maxHp: pc.maxHp,
         });
       }
     }

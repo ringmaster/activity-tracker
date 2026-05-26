@@ -39,13 +39,25 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   touch-action: manipulation;
 }
 
-/* Override iOS Liquid Glass extreme border radius on all plugin inputs */
+/* Override iOS 26 Liquid Glass on every plugin control. iOS applies
+ * aggressive default `-webkit-appearance` styling to native form controls
+ * that (a) gives buttons huge rounded corners and (b) appears to clip or
+ * obscure inline SVG content inside <button>, which was making the
+ * PC/NPC/Object type icons disappear on iPad. Force appearance: none and
+ * a sensible 6px corner on everything authored by the plugin so the
+ * styling we wrote actually shows up. */
+.dnd-combat-bar-container button,
 .dnd-combat-bar-container input,
 .dnd-combat-bar-container select,
+.dnd-inline-view button,
 .dnd-inline-view input,
 .dnd-inline-view select,
+.dnd-roster-overlay button,
 .dnd-roster-overlay input,
-.dnd-roster-overlay select {
+.dnd-roster-overlay select,
+.dnd-dropdown button,
+.dnd-dropdown input,
+.dnd-dropdown select {
   -webkit-appearance: none;
   appearance: none;
   border-radius: 6px !important;
