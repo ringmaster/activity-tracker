@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
+  import { TARGET_TYPE_ICONS_INLINE } from "../../icons/target-icons";
 
   let {
     encounter,
@@ -149,16 +150,27 @@
         checked={sel.checked}
         onchange={() => toggleTarget(combatant.id)}
       />
-      <button
-        class="dnd-friendly-toggle"
-        title={isFriendly(combatant) ? "Ally (tap to mark hostile)" : "Enemy (tap to mark friendly)"}
-        onclick={() => toggleFriendly(combatant.id)}
-      >{isFriendly(combatant) ? "\u{1F6E1}" : "⚔"}</button>
+      {#if combatant.type === "object"}
+        <!-- Objects have no friendly/hostile state -- the icon is purely
+             a type indicator, not a toggle. Rendered as a span so it can't
+             be tabbed to or clicked. -->
+        <span
+          class="dnd-friendly-toggle dnd-friendly-toggle-static"
+          title="Object"
+        >{@html TARGET_TYPE_ICONS_INLINE.object}</span>
+      {:else}
+        <button
+          class="dnd-friendly-toggle"
+          class:friendly={isFriendly(combatant)}
+          title={isFriendly(combatant) ? "Ally (tap to mark hostile)" : "Enemy (tap to mark friendly)"}
+          onclick={() => toggleFriendly(combatant.id)}
+        >{@html combatant.type === "pc" ? TARGET_TYPE_ICONS_INLINE.pc : TARGET_TYPE_ICONS_INLINE.npc}</button>
+      {/if}
       <button
         class="dnd-target-name"
         onclick={() => selectSingle(combatant.id)}
       >
-        {combatant.name}
+        <span class="dnd-target-name-text">{combatant.name}</span>
         {#if prepLabel}
           <span class="dnd-target-prep">{prepLabel}</span>
         {/if}
@@ -170,6 +182,16 @@
         {#if (combatant.conditions ?? []).includes("dead")}
           <span class="dnd-combatant-tag">DEAD</span>
         {/if}
+        <!-- Conditions other than dead/fled (those get their own DEAD/FLED
+             chip), then the combatant's named tags (Blessed, Hexed,
+             Concentrating: X, Turned, ...). Same chip classes as the
+             code-block CombatantRow for visual consistency. -->
+        {#each (combatant.conditions ?? []).filter((c) => c !== "dead" && c !== "fled") as cond}
+          <span class="dnd-condition-chip">{cond}</span>
+        {/each}
+        {#each (combatant.tags ?? []) as tag (tag.id)}
+          <span class="dnd-tag-chip" title={tag.note ?? ""}>{tag.name}</span>
+        {/each}
       </button>
 
       {#if sel.checked}

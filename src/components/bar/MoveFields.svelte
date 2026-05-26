@@ -3,6 +3,7 @@
   import type { Zone } from "../../types/encounter";
   import { toSlug } from "../../utils/id-generator";
   import { PREPOSITION_ICONS, BUILTIN_PREPOSITIONS } from "../../icons/preposition-icons";
+  import { ACTION_ICONS } from "../../icons/action-icons";
 
   let { encounter, onDone }: {
     encounter: EncounterState;
@@ -122,7 +123,9 @@
 
 <div class="dnd-action-bar dnd-move-bar">
   <div class="dnd-move-row">
-    <button class="dnd-bar-btn active" onclick={onDone} title="Cancel move">&larr;</button>
+    <button class="dnd-bar-btn active" onclick={onDone} title="Cancel move">
+      <span class="dnd-action-icon dnd-icon-move">{@html ACTION_ICONS.move}</span>
+    </button>
     <button
       class="dnd-bar-btn dnd-move-flee-btn"
       class:selected={fleeing}

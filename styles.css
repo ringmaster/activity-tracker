@@ -565,6 +565,7 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   width: 44px;
   min-height: 28px;
   height: 28px;
+  background: var(--background-primary);
 }
 
 /* ---------- Obligation banners ---------- */
@@ -771,12 +772,21 @@ body.dnd-ios-phone .dnd-combat-bar-container {
 }
 
 .dnd-action-icon svg path {
-  fill: inherit;
+  fill: currentColor;
 }
 
-.dnd-icon-cast svg { fill: #a080e0; }
-.dnd-icon-heal { color: #e04040; }
-.dnd-icon-move svg { fill: #60b0e0; }
+/* Distinct accent color per action type so the bar reads at a glance.
+ * Applied to the wrapper; the SVG path inherits via fill: currentColor. */
+.dnd-icon-attack { color: #c0c0c0; }
+.dnd-icon-cast   { color: #a080e0; }
+.dnd-icon-heal   { color: #e04040; }
+.dnd-icon-move   { color: #60b0e0; }
+.dnd-icon-note   { color: #d4a05c; }
+
+/* When the leftmost button is in its "active preset" state (highlighted
+ * accent background), invert the icon to the on-accent color so it stays
+ * visible. */
+.dnd-bar-btn.active .dnd-action-icon { color: var(--text-on-accent); }
 
 /* ---------- Move bar (zone-based) ---------- */
 .dnd-move-bar {
@@ -1222,6 +1232,30 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--text-muted);
+}
+
+/* The friendly toggle now hosts a type-icon SVG; the inherited svg color
+ * follows the wrapper's `color`. Friendly state tints it (accent for
+ * allies). The static variant (objects) drops cursor: pointer and any
+ * hover affordance. */
+.dnd-friendly-toggle svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.dnd-friendly-toggle svg path,
+.dnd-friendly-toggle svg g {
+  fill: currentColor;
+}
+
+.dnd-friendly-toggle.friendly {
+  color: var(--interactive-accent);
+}
+
+.dnd-friendly-toggle-static {
+  cursor: default;
 }
 
 .dnd-target-hp {
@@ -1261,6 +1295,19 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   font-size: 14px;
   text-align: left;
   justify-content: unset;
+  /* Flex with a small gap so the name text and the inline pills
+   * (HP, prep, DEAD/FLED, conditions, tags) don't sit shoulder-to-
+   * shoulder. Wraps onto a second line when the chip count overflows. */
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Name string itself gets no extra spacing -- the .dnd-target-name flex
+ * gap handles separation from whatever follows. */
+.dnd-target-name-text {
+  display: inline-block;
 }
 
 .dnd-target-hint {
@@ -1959,4 +2006,48 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   font-size: 12px;
   border-color: var(--text-error, #d84a4a);
   color: var(--text-error, #d84a4a);
+}
+
+/* AC shield chip inside the target button. Inline-flex so the shield SVG
+ * and the value sit on the baseline next to the target name. Kept compact
+ * so the button width doesn't blow up when an AC is visible. */
+.dnd-target-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dnd-target-ac {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.dnd-target-ac-icon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+  color: currentColor;
+}
+
+/* Shield sizes with the surrounding text. 1em matches the font's cap+
+ * descender envelope, so the icon visually equals the digits next to it.
+ * The SVG file ships without explicit width/height (action-icons.ts uses
+ * unsized() for inline glyphs), so CSS wins outright. */
+.dnd-target-ac-icon svg {
+  width: 1em;
+  height: 1em;
+  display: block;
+}
+
+.dnd-target-ac-icon svg path,
+.dnd-target-ac-icon svg g {
+  fill: currentColor;
+}
+
+.dnd-target-btn.active .dnd-target-ac {
+  color: var(--text-on-accent);
 }

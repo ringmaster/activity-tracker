@@ -63,16 +63,17 @@
 
   <button
     class="dnd-bar-btn dnd-bar-actor"
+    class:active={showActorDropdown}
     onclick={toggleActorDropdown}
   >
     {actorLabel} &#9662;
   </button>
 
-  <button class="dnd-bar-btn" onclick={() => setAction("attack")} title="Attack">&#9876;</button>
+  <button class="dnd-bar-btn" onclick={() => setAction("attack")} title="Attack"><span class="dnd-action-icon dnd-icon-attack">{@html ACTION_ICONS.attack}</span></button>
   <button class="dnd-bar-btn" onclick={() => setAction("cast")} title="Cast"><span class="dnd-action-icon dnd-icon-cast">{@html ACTION_ICONS.cast}</span></button>
-  <button class="dnd-bar-btn" onclick={() => setAction("heal")} title="Heal"><span class="dnd-action-icon dnd-icon-heal">&#10084;</span></button>
+  <button class="dnd-bar-btn" onclick={() => setAction("heal")} title="Heal"><span class="dnd-action-icon dnd-icon-heal">{@html ACTION_ICONS.heal}</span></button>
   <button class="dnd-bar-btn" onclick={() => setAction("move")} title="Move"><span class="dnd-action-icon dnd-icon-move">{@html ACTION_ICONS.move}</span></button>
-  <button class="dnd-bar-btn" onclick={() => setAction("note")} title="Note">&#128221;</button>
+  <button class="dnd-bar-btn" onclick={() => setAction("note")} title="Note"><span class="dnd-action-icon dnd-icon-note">{@html ACTION_ICONS.note}</span></button>
 
   <button class="dnd-bar-btn" onclick={handleNext} title="Next turn">&#9654;</button>
 </div>

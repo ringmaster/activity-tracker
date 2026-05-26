@@ -73,6 +73,16 @@ export function prepareRoster(
         if (creature?.vulnerabilities) c.vulnerabilities = creature.vulnerabilities;
       }
 
+      // Auto-populate actions from the bestiary's parsed action list when
+      // the YAML didn't author any of its own. The parser fills toHit, dmg,
+      // range, save, and stashes the full prose in desc; whatever it misses,
+      // the DM composes at the table via the + menu. Authored actions still
+      // win wholesale so any hand-tuning isn't clobbered by the bestiary.
+      if (c.statblock && (!c.actions || c.actions.length === 0)) {
+        const creature = getCreature(app, c.statblock);
+        if (creature?.actions) c.actions = creature.actions;
+      }
+
       return {
         id: c.id,
         name: c.name,

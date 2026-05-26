@@ -152,9 +152,10 @@
     }
 
     // If the user explicitly picked a bestiary entry (and didn't edit the
-    // name away from it), stamp the statblock name + r/i/v from the
-    // bestiary onto the new combatant. Free-text names get nothing
-    // extra -- you can still type "Bandit Lieutenant" for a custom NPC.
+    // name away from it), stamp the statblock name + r/i/v + parsed
+    // actions from the bestiary onto the new combatant. Free-text names
+    // get nothing extra -- you can still type "Bandit Lieutenant" for a
+    // custom NPC.
     if (newType === "npc" && pickedStatblock && newName.trim() === pickedStatblock) {
       combatant.statblock = pickedStatblock;
       const creature = getCreature(encounter.app, pickedStatblock);
@@ -162,6 +163,7 @@
         if (creature.resistances) combatant.resistances = creature.resistances;
         if (creature.immunities) combatant.immunities = creature.immunities;
         if (creature.vulnerabilities) combatant.vulnerabilities = creature.vulnerabilities;
+        if (creature.actions) combatant.actions = creature.actions;
       }
     }
 

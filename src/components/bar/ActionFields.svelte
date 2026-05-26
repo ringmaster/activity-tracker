@@ -14,6 +14,7 @@
   import DamageTypeIcon from "../shared/DamageTypeIcon.svelte";
   import AddTargetForm from "./AddTargetForm.svelte";
   import { PREPOSITION_ICONS, BUILTIN_PREPOSITIONS } from "../../icons/preposition-icons";
+  import { ACTION_ICONS } from "../../icons/action-icons";
 
   type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "counter" | "move" | "failed" | "ready";
 
@@ -446,10 +447,20 @@
     if (checked.length === 1) {
       const c = encounter.getCombatant(checked[0]);
       const name = c?.name ?? checked[0];
-      const ac = c?.ac != null ? ` (${c.ac})` : "";
-      return `\u2192 ${name}${ac}${warn}`;
+      // AC no longer baked into the string -- it's rendered as a small
+      // shield + number chip beside the label so the value reads at a
+      // glance even on a crowded bar.
+      return `\u2192 ${name}${warn}`;
     }
     return `\u2192 ${checked.length} targets`;
+  });
+
+  /** AC of the single chosen target, or null if none / multiple. Surfaced
+   *  as the inline shield chip on the target button. */
+  let singleTargetAc = $derived.by<number | null>(() => {
+    if (checkedTargetIds.length !== 1) return null;
+    const c = encounter.getCombatant(checkedTargetIds[0]);
+    return typeof c?.ac === "number" ? c.ac : null;
   });
 
   // --- Selection ---
@@ -1326,10 +1337,31 @@
   />
 {:else}
 <div class="dnd-action-bar">
-  <button class="dnd-bar-btn active" onclick={onDone} title="Cancel">{cancelIcon}</button>
+  <!-- Leftmost button doubles as the "active preset" indicator. Match the
+       icons on DefaultBar so the visual continuity reads: the bar button
+       the user pressed stays in the same spot, just highlighted active. -->
+  <button class="dnd-bar-btn active" onclick={onDone} title="Cancel">
+    {#if preset === "attack"}
+      <span class="dnd-action-icon dnd-icon-attack">{@html ACTION_ICONS.attack}</span>
+    {:else if preset === "cast"}
+      <span class="dnd-action-icon dnd-icon-cast">{@html ACTION_ICONS.cast}</span>
+    {:else if preset === "heal"}
+      <span class="dnd-action-icon dnd-icon-heal">{@html ACTION_ICONS.heal}</span>
+    {/if}
+  </button>
 
-  <button class="dnd-bar-btn" onclick={() => { const next = !showTargets; closeAllDropdowns(); showTargets = next; }}>
+  <button
+    class="dnd-bar-btn dnd-target-btn"
+    class:active={showTargets}
+    onclick={() => { const next = !showTargets; closeAllDropdowns(); showTargets = next; }}
+  >
     {targetLabel}
+    {#if singleTargetAc != null}
+      <span class="dnd-target-ac" title="Armor Class">
+        <span class="dnd-target-ac-icon">{@html ACTION_ICONS.shield}</span>
+        <span class="dnd-target-ac-value">{singleTargetAc}</span>
+      </span>
+    {/if}
   </button>
 
   <input

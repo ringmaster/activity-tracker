@@ -1,4 +1,6 @@
 import type { App } from "obsidian";
+import type { CombatAction } from "../types/encounter";
+import { parseStatblockAction } from "./statblock-action-parser";
 
 /** Check if Fantasy Statblocks plugin is available. */
 export function isStatblocksAvailable(app: App): boolean {
@@ -10,7 +12,12 @@ export interface CreatureData {
   hp?: number;
   ac?: number;
   dexMod?: number;
-  actions?: { name: string; desc: string }[];
+  /** Parsed action shapes derived from the bestiary's action descriptions.
+   *  Whatever fields the parser could extract (toHit, dmg, range, save) are
+   *  populated; the original text always lives in `desc` so the DM sees the
+   *  prose under the bar and can compose chits manually for whatever the
+   *  parser missed. */
+  actions?: CombatAction[];
   resistances?: string[];
   immunities?: string[];
   vulnerabilities?: string[];
@@ -156,7 +163,7 @@ export function getCreature(app: App, name: string): CreatureData | null {
     hp: creature.hp ?? creature.hit_points,
     ac: creature.ac ?? creature.armor_class,
     dexMod,
-    actions: creature.actions,
+    actions: parseRawActions(creature.actions),
     resistances: creature.damage_resistances
       ? parseList(creature.damage_resistances)
       : undefined,
@@ -167,6 +174,23 @@ export function getCreature(app: App, name: string): CreatureData | null {
       ? parseList(creature.damage_vulnerabilities)
       : undefined,
   };
+}
+
+/** Run the per-action parser over the bestiary's raw actions array. The raw
+ *  shape Fantasy Statblocks emits is `{ name, desc }` (or `description`);
+ *  the parser handles either. Returns undefined for missing/empty input so
+ *  the caller can distinguish "no actions" from "empty array." */
+function parseRawActions(raw: any): CombatAction[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out: CombatAction[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const aName = entry.name ?? "";
+    const aDesc = entry.desc ?? entry.description ?? "";
+    if (!aName) continue;
+    out.push(parseStatblockAction(aName, aDesc));
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 /** Get all creature names for autocomplete. */

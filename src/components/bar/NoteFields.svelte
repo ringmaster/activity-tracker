@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import { commitNote } from "../../state/action-logger.svelte";
+  import { ACTION_ICONS } from "../../icons/action-icons";
 
   let { encounter, onDone }: {
     encounter: EncounterState;
@@ -29,7 +30,9 @@
 </script>
 
 <div class="dnd-action-bar">
-  <button class="dnd-bar-btn active" onclick={onDone} title="Cancel note">&#128221;</button>
+  <button class="dnd-bar-btn active" onclick={onDone} title="Cancel note">
+    <span class="dnd-action-icon dnd-icon-note">{@html ACTION_ICONS.note}</span>
+  </button>
 
   <span style="font-size: 13px; color: var(--text-muted);">
     {encounter.effectiveActor?.name ?? "?"}:
