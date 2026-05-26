@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { EncounterState } from "../../state/encounter-state.svelte";
-  import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction, ZonePosition } from "../../types/encounter";
+  import type { DamageComponent, AuthoredDamage, TagTrigger, ActionEffect, CombatAction, ReadiedActionSnapshot, ZonePosition } from "../../types/encounter";
   import type { Rider } from "../../types/party";
   import { constrainToViewport } from "../../utils/constrain-to-viewport.svelte";
   import { rollDiceExpression } from "../../utils/dice";
@@ -15,7 +15,7 @@
   import AddTargetForm from "./AddTargetForm.svelte";
   import { PREPOSITION_ICONS, BUILTIN_PREPOSITIONS } from "../../icons/preposition-icons";
 
-  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "counter" | "move" | "failed";
+  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "counter" | "move" | "failed" | "ready";
 
   interface DamageEffect {
     type: "damage";
@@ -56,7 +56,13 @@
     type: "failed";
   }
 
-  type SpellEffect = DamageEffect | ConditionEffect | HealEffect | TagEffect | ConcentrationEffect | CounterEffect | FailedEffect;
+  /** Modal chit: the action commits as held (no targets/damage applied);
+   *  a snapshot lands on the actor for resume via the actor dropdown. */
+  interface ReadyEffect {
+    type: "ready";
+  }
+
+  type SpellEffect = DamageEffect | ConditionEffect | HealEffect | TagEffect | ConcentrationEffect | CounterEffect | FailedEffect | ReadyEffect;
 
   const COMMON_CONDITIONS = [
     "blinded", "charmed", "deafened", "frightened", "grappled",
@@ -74,7 +80,16 @@
     preset?: "attack" | "cast" | "heal";
   } = $props();
 
-  let via = $state("");
+  // Pick up a readied-action snapshot if the actor dropdown set one. The slot
+  // is read synchronously at script eval (before the $state initializers
+  // below) so each local state var can seed from the snapshot. Cleared
+  // immediately so a remount in a different context starts fresh.
+  // svelte-ignore state_referenced_locally
+  const resumeSnapshot: ReadiedActionSnapshot | null = encounter.resumingReadiedFrom;
+  // svelte-ignore state_referenced_locally
+  if (resumeSnapshot) encounter.resumingReadiedFrom = null;
+
+  let via = $state(resumeSnapshot?.via ?? "");
   // svelte-ignore state_referenced_locally
   // svelte-ignore state_referenced_locally
   let showTargets = $state(preset === "attack" && encounter.lastTargetIds.length === 0);
@@ -90,17 +105,17 @@
   let implicitMoveOverride = $state<ZonePosition | null>(null);
   let showImplicitMoveDetails = $state(false);
   /** Track which tag indices are auto-populated from the library definition. */
-  let autoTagIndices = $state<Set<number>>(new Set());
+  let autoTagIndices = $state<Set<number>>(new Set(resumeSnapshot?.autoTagIndices ?? []));
 
   function closeAllDropdowns() {
     showTargets = false;
     showViaSuggestions = false;
     showEffectPicker = false;
   }
-  let spellKey = $state("");
-  let isConc = $state(false);
-  let isSpell = $state(false);
-  let selectedVerb = $state<string | undefined>(undefined);
+  let spellKey = $state(resumeSnapshot?.spellKey ?? "");
+  let isConc = $state(resumeSnapshot?.isConc ?? false);
+  let isSpell = $state(resumeSnapshot?.isSpell ?? false);
+  let selectedVerb = $state<string | undefined>(resumeSnapshot?.verb);
   let diceHint = $state<string | null>(null);
   let actionNote = $state<string | null>(null);
   let spellDesc = $state<string | null>(null);
@@ -117,21 +132,29 @@
 
   // svelte-ignore state_referenced_locally
   let effects = $state<SpellEffect[]>(
-    preset === "attack"
-      ? [{ type: "damage", amount: 0, damageType: "" }]
-      : preset === "heal"
-        ? [{ type: "heal", amount: 0 }]
-        : [],
+    resumeSnapshot?.effects
+      ? (resumeSnapshot.effects as SpellEffect[])
+      : preset === "attack"
+        ? [{ type: "damage", amount: 0, damageType: "" }]
+        : preset === "heal"
+          ? [{ type: "heal", amount: 0 }]
+          : [],
   );
 
-  // Initialize target selection from last-used targets (persists within a turn)
+  // Initialize target selection from last-used targets (persists within a turn).
+  // A resume snapshot wins if present: the DM picked targets at ready time and
+  // we restore them so the resume bar comes up ready to commit.
   function buildInitialTargets(): Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }> {
     const initial: Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }> = {};
-    // Pre-populate entries for ALL combatants so the dropdown renders them immediately
     for (const c of encounter.combatants ?? []) {
-      const wasSelected = encounter.lastTargetIds.includes(c.id);
       const isDead = (c.conditions ?? []).includes("dead");
-      initial[c.id] = { checked: wasSelected && !isDead, outcome: "full" };
+      const fromSnap = resumeSnapshot?.targets?.[c.id];
+      if (fromSnap) {
+        initial[c.id] = { checked: fromSnap.checked && !isDead, outcome: fromSnap.outcome };
+      } else {
+        const wasSelected = encounter.lastTargetIds.includes(c.id);
+        initial[c.id] = { checked: wasSelected && !isDead, outcome: "full" };
+      }
     }
     return initial;
   }
@@ -144,10 +167,10 @@
 
   // Rider toggles: which of the actor's authored riders are active for this
   // commit. Keyed by rider name. Reset whenever the action selection changes.
-  let activeRiderNames = $state<Set<string>>(new Set());
+  let activeRiderNames = $state<Set<string>>(new Set(resumeSnapshot?.activeRiderNames ?? []));
   // Damage-rider damage value entry, keyed by rider name. Each damage rider
   // has at most one damage effect in its chip.
-  let riderDamageValues = $state<Record<string, number>>({});
+  let riderDamageValues = $state<Record<string, number>>(resumeSnapshot?.riderDamageValues ?? {});
 
   /** Riders authored on the current actor, gated by `when:` against the
    *  current preset. Depleted (uses.current === 0) riders are excluded so
@@ -431,7 +454,12 @@
 
   // --- Selection ---
 
-  let selectedLibAction = $state<CombatAction | null>(null);
+  // Re-resolve from the library when resuming a readied action. Storing only
+  // `via` in the snapshot keeps the YAML small and lets library edits flow
+  // through to the resumed bar.
+  let selectedLibAction = $state<CombatAction | null>(
+    resumeSnapshot?.via ? (findLibraryAction(resumeSnapshot.via) ?? null) : null,
+  );
 
   function selectAction(action: ActionSuggestion) {
     if (!action.name || !action.name.trim()) {
@@ -766,6 +794,13 @@
     } else if (effectType === "failed") {
       // Replace all existing effects with a single failed marker
       effects = [{ type: "failed" }];
+    } else if (effectType === "ready") {
+      // Modal chit. Stacks alongside the action's other effects; on commit,
+      // its presence redirects handleCommit into the snapshot path instead of
+      // applying anything. Only one Ready chit makes sense.
+      if (!effects.some((e) => e.type === "ready")) {
+        effects = [...effects, { type: "ready" }];
+      }
     }
     showEffectPicker = false;
     focusFirstEffectInput();
@@ -784,6 +819,44 @@
     let selectedTargets = Object.entries(targets)
       .filter(([_, t]) => t.checked)
       .map(([id, t]) => ({ who: id, outcome: t.outcome }));
+
+    // --- Ready branch ---
+    // If the Ready chit is present, this commit becomes a hold: snapshot the
+    // current bar state onto the actor (minus the Ready chit itself, which
+    // would resume into a snapshot-of-a-snapshot loop), log a `readied`
+    // entry carrying the same snapshot for rewind, and skip all the normal
+    // attack/heal/condition application paths.
+    if (effects.some((e) => e.type === "ready")) {
+      const snapshotEffects = effects.filter((e) => e.type !== "ready");
+      const snapshot: ReadiedActionSnapshot = {
+        preset,
+        via,
+        isSpell: isSpell || undefined,
+        isConc: isConc || undefined,
+        spellKey: spellKey || undefined,
+        verb: selectedVerb,
+        effects: snapshotEffects,
+        targets,
+        activeRiderNames: Array.from(activeRiderNames),
+        riderDamageValues,
+        autoTagIndices: Array.from(autoTagIndices),
+      };
+      actor.readied_action = snapshot;
+      encounter.logInsert({
+        readied: {
+          by: actor.id,
+          via: via || (isSpell ? "a spell" : "an action"),
+          isSpell: isSpell || undefined,
+          verb: selectedVerb,
+          tgt: selectedTargets.map((t) => t.who),
+          snapshot,
+        },
+      });
+      encounter.lastTargetIds = selectedTargets.map((t) => t.who);
+      encounter.flush();
+      onDone();
+      return;
+    }
 
     // If no targets selected: casts/heals default to self. Attacks normally
     // require a target, EXCEPT library abilities like Hide, Dodge, Dash,
@@ -932,6 +1005,7 @@
           verb: selectedVerb,
           spell: isSpellAction || undefined,
           failed: true,
+          from_readied: resumeSnapshot ? true : undefined,
           tgt: selectedTargets.map((t) => ({ who: t.who, hit: "zero" as const })),
         },
       } as any);
@@ -1004,6 +1078,7 @@
         conc: isConc || undefined,
         isSpell: isSpell || preset === "cast" || undefined,
         verb: selectedVerb,
+        fromReadied: resumeSnapshot ? true : undefined,
         actionEffects: learnableEffects.length > 0 ? learnableEffects : undefined,
       });
     }
@@ -1019,6 +1094,7 @@
       commitHeal(encounter, {
         by: actor.id,
         via: via || undefined,
+        fromReadied: resumeSnapshot ? true : undefined,
         targets: selectedTargets.map((t) => ({ who: t.who, hp: totalHeal })),
       });
     }
@@ -1379,22 +1455,32 @@
         <span class="dnd-effect-label">{preset === "attack" ? "Miss" : "Failed"}</span>
         <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
       </div>
+    {:else if effect.type === "ready"}
+      <div class="dnd-effect-widget dnd-ready-widget" title="Hold for trigger; commit logs a readied entry">
+        <span class="dnd-effect-label">&#9201; Ready</span>
+        <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
+      </div>
     {/if}
   {/each}
 
   <!-- Auto-tags pill -->
-  {#if autoTagCount > 0 && !showAutoTags}
+  {#if autoTagCount > 0}
     <button
       class="dnd-auto-tags-pill"
-      onclick={() => { showAutoTags = true; }}
-      title="Show auto-applied tags"
-    >{autoTagCount} tag{autoTagCount > 1 ? "s" : ""} &#9656;</button>
-  {:else if autoTagCount > 0 && showAutoTags}
-    <button
-      class="dnd-auto-tags-pill active"
-      onclick={() => { showAutoTags = false; }}
-      title="Collapse auto-applied tags"
-    >{autoTagCount} tag{autoTagCount > 1 ? "s" : ""} &#9662;</button>
+      class:active={showAutoTags}
+      onclick={() => { showAutoTags = !showAutoTags; }}
+      title={showAutoTags ? "Collapse auto-applied tags" : "Show auto-applied tags"}
+      aria-label="{autoTagCount} auto-applied tag{autoTagCount > 1 ? 's' : ''}"
+    >
+      <span class="dnd-auto-tags-glyph">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 3 H13 L21 11 L11 21 L3 13 Z" fill="currentColor" />
+          <circle cx="7.5" cy="7.5" r="1.25" fill="var(--background-primary)" />
+        </svg>
+        <span class="dnd-auto-tags-count">{autoTagCount}</span>
+      </span>
+      <span class="dnd-auto-tags-caret">{showAutoTags ? "▾" : "▸"}</span>
+    </button>
   {/if}
 
   <!-- Implicit move tile (touch/5ft spell into a different zone) -->
@@ -1474,6 +1560,10 @@
         <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("concentration")}>
           <span class="dnd-via-name">Concentration</span>
           <span class="dnd-via-detail">caster must concentrate</span>
+        </button>
+        <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("ready")}>
+          <span class="dnd-via-name">Ready</span>
+          <span class="dnd-via-detail">hold for a trigger; resume from actor dropdown</span>
         </button>
         {#if encounter.zones.length > 0}
           <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("move")}>

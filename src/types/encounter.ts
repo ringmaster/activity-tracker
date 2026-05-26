@@ -8,6 +8,10 @@ export interface DamageComponent {
   /** Optional label for the source of this damage component (e.g. "Sneak
    *  Attack"). Surfaces in the prose log as "15 sl + 7 sl (Sneak Attack)". */
   source?: string;
+  /** How the target's defenses scaled this component. "n" is already the
+   *  scaled value (halved on resisted, doubled on vulnerable, zero on
+   *  immune); this annotation drives the prose marker only. */
+  mitigation?: "resisted" | "vulnerable" | "immune";
 }
 
 /** Damage as authored in YAML actions; `dice` is a display string like "2d6+2". */
@@ -166,6 +170,17 @@ export interface Combatant {
   class_level?: string;
   zone?: ZonePosition;
   statblock?: string;
+  /** Damage types this combatant takes half of. Substring-matched against
+   *  the incoming component's `type`, so an entry like
+   *  "piercing from nonmagical attacks" (as it comes out of the Fantasy
+   *  Statblocks bestiary) still matches a "piercing" attack — at the cost
+   *  of not distinguishing magical vs nonmagical. Authored entries can
+   *  override with a clean list to fix the precision. */
+  resistances?: string[];
+  /** Damage types this combatant ignores entirely (n -> 0). */
+  immunities?: string[];
+  /** Damage types this combatant takes double of. */
+  vulnerabilities?: string[];
   init: number | null;
   ac?: number;
   /** Default attack roll bonus for this combatant's actions. */
@@ -203,6 +218,39 @@ export interface Combatant {
    *  decremented on commit; reset at start of actor's turn when
    *  action.uses.per === "turn". */
   action_uses?: Record<string, { current: number; max: number }>;
+  /** A held/readied action waiting on a trigger. The actor dropdown surfaces
+   *  this as a "{name} ready" button; clicking it swaps to this actor, opens
+   *  the bar in the snapshot's preset, and hydrates fields from the snapshot
+   *  so the DM can finish filling in damage rolls and commit. Auto-cleared at
+   *  the start of this combatant's next turn (with a readied_expired log
+   *  entry) if not fired. */
+  readied_action?: ReadiedActionSnapshot;
+  /** PC death save tracker. Set when the PC drops to 0 HP / is marked down;
+   *  cleared on heal, stabilize, or revive (nat 20). 3 successes -> stable
+   *  (counts stay, `stable: true`, no further saves expected); 3 failures
+   *  -> dead (the "dead" condition is applied and death_saves is cleared by
+   *  the dead handler). */
+  death_saves?: { successes: number; failures: number; stable?: boolean };
+}
+
+/** Captured bar state at ready time. Hydrated back into ActionFields when the
+ *  DM clicks the actor-dropdown ready button. effects/targets are stored as
+ *  the same loose shapes ActionFields uses locally; the bar casts on read. */
+export interface ReadiedActionSnapshot {
+  preset: "attack" | "cast" | "heal";
+  via: string;
+  isSpell?: boolean;
+  isConc?: boolean;
+  spellKey?: string;
+  verb?: string;
+  /** SpellEffect[] as authored by the bar, sans the Ready chit itself. */
+  effects?: any[];
+  /** Target picks at ready time. The DM can adjust on fire. */
+  targets?: Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>;
+  /** Active rider names (Set serialized to array for JSON). */
+  activeRiderNames?: string[];
+  riderDamageValues?: Record<string, number>;
+  autoTagIndices?: number[];
 }
 
 /** The authored shape before expansion; `count` triggers multi-combatant generation. */
@@ -213,6 +261,11 @@ export interface AuthoredCombatant {
   class_level?: string;
   zone?: ZonePosition;
   statblock?: string;
+  /** Per-encounter override of damage type lists. When present, used as-is
+   *  and the bestiary auto-lookup is skipped. */
+  resistances?: string[];
+  immunities?: string[];
+  vulnerabilities?: string[];
   init?: number | null;
   ac?: number;
   count?: number;

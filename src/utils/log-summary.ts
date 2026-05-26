@@ -24,24 +24,30 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     const isSpell = !!entry.attack.spell;
     const isFailed = !!entry.attack.failed;
     const isResolved = !!entry.attack.resolved;
+    const fromReadied = !!entry.attack.from_readied;
     const customVerb = entry.attack.verb;
     const tgtIds = (entry.attack.tgt ?? []).map((t: any) => t.who);
     const selfOnly = isSelfOnly(actorId, tgtIds);
     const allNoDamage = (entry.attack.tgt ?? []).every((t: any) => !t.dmg || t.dmg.length === 0);
+    // Insert " (readied)" before the trailing period so readers see how the
+    // action resolved. Skip resolved deferred effects (they're not the
+    // commit-of-a-held-action; they fire on their own trigger).
+    const wrap = (s: string) =>
+      fromReadied && !isResolved ? s.replace(/\.\s*$/, " (readied).") : s;
 
     // Failed actions
     if (isFailed) {
       if (selfOnly) {
-        return `${actorName} failed to use ${entry.attack.via}.`;
+        return wrap(`${actorName} failed to use ${entry.attack.via}.`);
       }
       const targetNames = tgtIds.map((id: string) => encounter.getCombatant(id)?.name ?? id).join(", ");
       if (customVerb) {
-        return `${actorName} fails to ${customVerb.replace(/s$/, "")} ${targetNames}.`;
+        return wrap(`${actorName} fails to ${customVerb.replace(/s$/, "")} ${targetNames}.`);
       }
       if (isSpell) {
-        return `${actorName} cast ${entry.attack.via} on ${targetNames}. Failed.`;
+        return wrap(`${actorName} cast ${entry.attack.via} on ${targetNames}. Failed.`);
       }
-      return `${actorName} missed ${targetNames} with ${entry.attack.via}.`;
+      return wrap(`${actorName} missed ${targetNames} with ${entry.attack.via}.`);
     }
 
     const targetParts = (entry.attack.tgt ?? [])
@@ -49,9 +55,16 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
         const name = encounter.getCombatant(t.who)?.name ?? t.who;
         if (t.dmg && t.dmg.length > 0) {
           const dmgParts = t.dmg
-            .map((d: any) => d.source
-              ? `${d.n} ${d.type} (${d.source})`
-              : `${d.n} ${d.type}`)
+            .map((d: any) => {
+              // Compose: "{n} {type}[ ({source})][ ({mitigation})]". Source
+              // and mitigation can co-occur (e.g. a Sneak Attack component
+              // hitting a resistant target).
+              const parts: string[] = [];
+              if (d.source) parts.push(d.source);
+              if (d.mitigation) parts.push(d.mitigation);
+              const suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+              return `${d.n} ${d.type}${suffix}`;
+            })
             .join(" + ");
           return `${name} dealing ${dmgParts}`;
         }
@@ -70,9 +83,9 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     // Self-targeted: drop "on [self]"
     if (selfOnly) {
       // Self-targeted with damage and a custom verb (rare): keep both.
-      if (customVerb && !allNoDamage) return `${actorName} ${customVerb} ${entry.attack.via}.`;
+      if (customVerb && !allNoDamage) return wrap(`${actorName} ${customVerb} ${entry.attack.via}.`);
       // Self-targeted spells: the cast itself is the action.
-      if (isSpell) return `${actorName} cast ${entry.attack.via}.`;
+      if (isSpell) return wrap(`${actorName} cast ${entry.attack.via}.`);
       if (customVerb) {
         // Distinguish verbs that ARE the action name's gerund (Hide -> "hides",
         // Dodge -> "dodges"; drop the via) from generic verbs that describe a
@@ -82,29 +95,32 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
         const verbLower = customVerb.toLowerCase();
         const nameLower = (entry.attack.via ?? "").toLowerCase();
         if (nameLower && verbLower.startsWith(nameLower)) {
-          return `${actorName} ${customVerb}.`;
+          return wrap(`${actorName} ${customVerb}.`);
         }
-        return `${actorName} ${customVerb} ${entry.attack.via}.`;
+        return wrap(`${actorName} ${customVerb} ${entry.attack.via}.`);
       }
-      return `${actorName} used ${entry.attack.via}.`;
+      return wrap(`${actorName} used ${entry.attack.via}.`);
     }
 
     if (customVerb) {
-      return `${actorName} ${customVerb} ${targetParts}.`;
+      return wrap(`${actorName} ${customVerb} ${targetParts}.`);
     }
     if (isSpell) {
-      return `${actorName} cast ${entry.attack.via} on ${targetParts}.`;
+      return wrap(`${actorName} cast ${entry.attack.via} on ${targetParts}.`);
     }
     if (allNoDamage) {
-      return `${actorName} missed ${targetParts} with ${entry.attack.via}.`;
+      return wrap(`${actorName} missed ${targetParts} with ${entry.attack.via}.`);
     }
-    return `${actorName} attacked ${targetParts} with ${entry.attack.via}.`;
+    return wrap(`${actorName} attacked ${targetParts} with ${entry.attack.via}.`);
   }
   if (entry.heal) {
     const actorId = entry.heal.by;
     const actorName = encounter.getCombatant(actorId)?.name ?? actorId;
     const isResolved = !!entry.heal.resolved;
+    const fromReadied = !!entry.heal.from_readied;
     const tgtIds = entry.heal.tgt.map((t: any) => t.who);
+    const wrap = (s: string) =>
+      fromReadied && !isResolved ? s.replace(/\.\s*$/, " (readied).") : s;
 
     if (isResolved) {
       const targets = entry.heal.tgt.map((t: any) => {
@@ -116,13 +132,13 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
 
     if (isSelfOnly(actorId, tgtIds)) {
       const hp = entry.heal.tgt[0]?.hp ?? 0;
-      return `${actorName} healed self for ${hp}.`;
+      return wrap(`${actorName} healed self for ${hp}.`);
     }
     const targets = entry.heal.tgt.map((t: any) => {
       const name = encounter.getCombatant(t.who)?.name ?? t.who;
       return `${name} for ${t.hp}`;
     }).join(", ");
-    return `${actorName} healed ${targets}.`;
+    return wrap(`${actorName} healed ${targets}.`);
   }
   if (entry.condition) {
     const targets = entry.condition.tgt
@@ -214,6 +230,45 @@ export function summarizeLogEntry(entry: any, encounter: EncounterState): string
     return banner
       ? `${counterName}${at}: ${banner}`
       : `${counterName}${at} threshold reached.`;
+  }
+  if (entry.readied) {
+    const actorName = encounter.getCombatant(entry.readied.by)?.name ?? entry.readied.by;
+    const tgtNames = (entry.readied.tgt ?? [])
+      .map((id: string) => encounter.getCombatant(id)?.name ?? id)
+      .join(", ");
+    const what = entry.readied.via || (entry.readied.isSpell ? "a spell" : "an action");
+    const verb = entry.readied.isSpell ? "readies to cast" : "readies";
+    if (tgtNames) {
+      return `${actorName} ${verb} ${what} on ${tgtNames}.`;
+    }
+    return `${actorName} ${verb} ${what}.`;
+  }
+  if (entry.readied_expired) {
+    const actorName = encounter.getCombatant(entry.readied_expired.by)?.name ?? entry.readied_expired.by;
+    const what = entry.readied_expired.via;
+    return `${actorName}'s readied ${what} was not used.`;
+  }
+  if (entry.death_save) {
+    const name = encounter.getCombatant(entry.death_save.who)?.name ?? entry.death_save.who;
+    switch (entry.death_save.kind) {
+      case "downed":
+        return `${name} is down (0 HP).`;
+      case "pass":
+        return `${name} makes a death save (success).`;
+      case "fail":
+        return `${name} fails a death save.`;
+      case "crit_fail":
+        return `${name} fails a death save (nat 1, two failures).`;
+      case "dmg_fail":
+        return `${name} takes damage while down (death-save failure).`;
+      case "stabilized":
+        return `${name} is stabilized.`;
+      case "revived":
+        return `${name} is back on their feet.`;
+      case "dead":
+        return `${name} dies.`;
+    }
+    return null;
   }
   if (entry.start_round) {
     return `--- Round ${entry.start_round.n} ---`;

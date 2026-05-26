@@ -64,6 +64,15 @@ export function prepareRoster(
         }
       }
 
+      // Auto-populate resistances/immunities/vulnerabilities from the
+      // bestiary if not authored on the NPC. Authored lists win.
+      if (c.statblock && (!c.resistances && !c.immunities && !c.vulnerabilities)) {
+        const creature = getCreature(app, c.statblock);
+        if (creature?.resistances) c.resistances = creature.resistances;
+        if (creature?.immunities) c.immunities = creature.immunities;
+        if (creature?.vulnerabilities) c.vulnerabilities = creature.vulnerabilities;
+      }
+
       return {
         id: c.id,
         name: c.name,
@@ -371,6 +380,21 @@ export function nextTurn(state: EncounterState): void {
         actor.action_uses[resolved.name].current = actor.action_uses[resolved.name].max;
       }
     }
+  }
+
+  // Expire any unfired readied action. RAW: the readied action is lost at the
+  // start of the readier's next turn. The snapshot is preserved on the log
+  // entry so a rewind can restore it.
+  if (actor.readied_action) {
+    const snapshot = actor.readied_action;
+    state.log.push({
+      readied_expired: {
+        by: actor.id,
+        via: snapshot.via || (snapshot.isSpell ? "a spell" : "an action"),
+        snapshot,
+      },
+    });
+    actor.readied_action = undefined;
   }
 
   state.flushNow();

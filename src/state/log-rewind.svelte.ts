@@ -129,6 +129,56 @@ export function rewindEntry(state: EncounterState, entry: any): boolean {
     return true;
   }
 
+  if (entry.readied) {
+    // Undoing the "ready" itself: the actor never held this action, so clear
+    // the marker if it's still pending. (If they already fired, the bar
+    // commit cleared it; nothing to do.)
+    const c = state.getCombatant(entry.readied.by);
+    if (c) c.readied_action = undefined;
+    return true;
+  }
+
+  if (entry.readied_expired) {
+    // Undoing the auto-expiration: restore the snapshot so the readied action
+    // is once again pending. The snapshot was preserved on the log entry for
+    // exactly this purpose.
+    const c = state.getCombatant(entry.readied_expired.by);
+    if (c && entry.readied_expired.snapshot) {
+      c.readied_action = entry.readied_expired.snapshot;
+    }
+    return true;
+  }
+
+  if (entry.death_save) {
+    const c = state.getCombatant(entry.death_save.who);
+    if (!c) return false;
+    const prev = entry.death_save.prev;
+    if (entry.death_save.kind === "downed") {
+      // Undo the initial down: clear the tracker and lift unconscious.
+      c.death_saves = undefined;
+      c.conditions = c.conditions.filter((x) => x !== "unconscious");
+    } else if (entry.death_save.kind === "dead") {
+      // Undo death: restore counts (prev was 2 failures, the third was
+      // crossed in the original recordDeathSave call which logged its own
+      // entry before this dead-marker), lift the "dead" condition, restore
+      // unconscious.
+      if (prev) c.death_saves = { successes: prev.successes, failures: prev.failures, stable: prev.stable };
+      c.conditions = c.conditions.filter((x) => x !== "dead");
+      if (!c.conditions.includes("unconscious")) c.conditions.push("unconscious");
+    } else if (entry.death_save.kind === "revived") {
+      // Undo revive: re-put the tracker and the unconscious condition.
+      if (prev) c.death_saves = { successes: prev.successes, failures: prev.failures, stable: prev.stable };
+      if (!c.conditions.includes("unconscious")) c.conditions.push("unconscious");
+    } else if (prev && c.death_saves) {
+      // pass / fail / crit_fail / dmg_fail / stabilized: roll the counts
+      // back to their prior values.
+      c.death_saves.successes = prev.successes;
+      c.death_saves.failures = prev.failures;
+      c.death_saves.stable = prev.stable;
+    }
+    return true;
+  }
+
   // Structural entries (start_combat, end_combat, start_round, start_turn,
   // save, note, remove_combatant, buff, debuff) are no-ops for rewind.
   return false;
@@ -221,6 +271,11 @@ function references(entry: any): {
   } else if (entry.ack_rung) {
     out.counterId = entry.ack_rung.counter;
     out.isAck = true;
+  } else if (entry.readied) {
+    if (entry.readied.by) out.combatantIds.push(entry.readied.by);
+    for (const id of entry.readied.tgt ?? []) out.combatantIds.push(id);
+  } else if (entry.readied_expired) {
+    if (entry.readied_expired.by) out.combatantIds.push(entry.readied_expired.by);
   }
   return out;
 }
@@ -294,6 +349,8 @@ export function entryKindLabel(entry: any): string {
   if (entry.move) return "move";
   if (entry.counter) return "counter tick";
   if (entry.ack_rung) return "ack rung";
+  if (entry.readied) return "readied";
+  if (entry.readied_expired) return "readied expired";
   if (entry.start_turn) return "start turn";
   if (entry.start_round) return "start round";
   return "entry";

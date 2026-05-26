@@ -1,7 +1,7 @@
 import type { EncounterState } from "./encounter-state.svelte";
 import type { DamageComponent, CombatAction, ActionEffect } from "../types/encounter";
 import type { AttackTargetResult } from "../types/actions";
-import { applyOutcome, totalDamage, concentrationDC } from "../utils/damage-calc";
+import { applyDefenses, applyOutcome, totalDamage, concentrationDC } from "../utils/damage-calc";
 import { findLibraryAction, addToLibrary } from "./library-loader";
 import { updatePartyMember } from "./party-loader";
 import { nowTimestamp } from "../utils/time";
@@ -20,6 +20,9 @@ export interface AttackParams {
   isSpell?: boolean;
   /** This is a resolved deferred effect, not a new action. */
   resolved?: boolean;
+  /** This commit closes a previously-held readied action. Stamped on the
+   *  attack entry so the prose log can render "(readied)" after the verb. */
+  fromReadied?: boolean;
   /** Effects applied during this action, for saving to the library. */
   actionEffects?: ActionEffect[];
 }
@@ -32,7 +35,15 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
       // No damage on a plain weapon attack = miss
       return { who: t.who, hit: "zero" as const };
     }
-    const dmg = applyOutcome(params.baseDmg, t.outcome);
+    let dmg = applyOutcome(params.baseDmg, t.outcome);
+    // Apply target's resistances/immunities/vulnerabilities to each
+    // component. The result's `n` is the actual damage that lands; the
+    // mitigation annotation drives the log marker only. PCs (and any
+    // combatant without r/i/v fields) pass through unchanged.
+    const target = state.getCombatant(t.who);
+    if (target && dmg.length > 0) {
+      dmg = applyDefenses(dmg, target);
+    }
     return {
       who: t.who,
       hit: t.outcome,
@@ -50,6 +61,7 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
   if (params.verb) entry.attack.verb = params.verb;
   if (params.isSpell) entry.attack.spell = true;
   if (params.resolved) entry.attack.resolved = true;
+  if (params.fromReadied) entry.attack.from_readied = true;
   if (params.save) entry.attack.save = params.save;
   state.logInsert(entry);
 
@@ -91,6 +103,8 @@ export interface HealParams {
   by: string;
   via?: string;
   resolved?: boolean;
+  /** This commit closes a previously-held readied action. See AttackParams. */
+  fromReadied?: boolean;
   targets: { who: string; hp: number }[];
 }
 
@@ -103,6 +117,7 @@ export function commitHeal(state: EncounterState, params: HealParams): void {
     },
   };
   if (params.resolved) entry.heal.resolved = true;
+  if (params.fromReadied) entry.heal.from_readied = true;
   state.logInsert(entry);
 
   for (const t of params.targets) {
@@ -124,6 +139,13 @@ export function commitHeal(state: EncounterState, params: HealParams): void {
         0,
         (combatant.damage_taken ?? 0) - t.hp,
       );
+      // Any positive healing on a PC in death-save state revives them: clear
+      // the counters, drop the unconscious condition. RAW: regaining any HP
+      // ends death saves. Stable PCs ALSO revive on heal (RAW: stable +
+      // healed = conscious immediately). 0-HP heals (rare) are no-ops here.
+      if (t.hp > 0 && combatant.death_saves) {
+        reviveFromDeathSaves(state, combatant.id);
+      }
     }
   }
 
@@ -275,6 +297,13 @@ function applyDamage(state: EncounterState, targetId: string, amount: number): v
     }
   } else if (combatant.type === "pc") {
     combatant.damage_taken = (combatant.damage_taken ?? 0) + remaining;
+    // Damage while making death saves auto-adds a failure (RAW: any damage
+    // = 1 failure; crit / melee-within-5ft = 2 failures, not modeled here
+    // -- the DM can hit "Nat 1" manually if they want the crit-fail path).
+    // Skip if no actual HP loss landed (remaining was absorbed by temp HP).
+    if (remaining > 0 && combatant.death_saves && !combatant.death_saves.stable) {
+      recordDeathSaveFailure(state, targetId, "dmg_fail");
+    }
   }
 
   // Concentration save if damaged and concentrating (and still alive)
@@ -423,4 +452,123 @@ function decrementSpellSlot(
   if (slot && slot.current > 0) {
     slot.current--;
   }
+}
+
+// ---------- Death save state machine ----------
+// PCs at 0 HP transition through a small machine: down -> rolling saves ->
+// stable | dead | revived. Each transition logs a death_save entry carrying
+// the prior counts so rewind can restore precisely without inferring deltas.
+
+function snapshotSaves(c: { death_saves?: { successes: number; failures: number; stable?: boolean } }) {
+  if (!c.death_saves) return undefined;
+  return {
+    successes: c.death_saves.successes,
+    failures: c.death_saves.failures,
+    stable: c.death_saves.stable,
+  };
+}
+
+/** PC has just dropped to 0 HP (or DM hand-marked them down). Initializes
+ *  the save tracker and adds the "unconscious" condition. No-op if already
+ *  in death-save state. */
+export function markDown(state: EncounterState, who: string): void {
+  const c = state.getCombatant(who);
+  if (!c || c.type !== "pc") return;
+  if (c.death_saves) return;
+  c.death_saves = { successes: 0, failures: 0 };
+  if (!c.conditions.includes("unconscious")) c.conditions.push("unconscious");
+  state.logInsert({ death_save: { who, kind: "downed" } });
+  state.flush();
+}
+
+/** Record a death-save roll. "pass" / "fail" / "crit_fail" cover the three
+ *  manual buttons. crit_fail = +2 failures (matches the nat-1 RAW rule).
+ *  Reaching 3 successes -> stable; reaching 3 failures -> dead. */
+export function recordDeathSave(
+  state: EncounterState,
+  who: string,
+  kind: "pass" | "fail" | "crit_fail",
+): void {
+  const c = state.getCombatant(who);
+  if (!c?.death_saves || c.death_saves.stable) return;
+  const prev = snapshotSaves(c);
+  if (kind === "pass") c.death_saves.successes++;
+  else if (kind === "fail") c.death_saves.failures++;
+  else if (kind === "crit_fail") c.death_saves.failures += 2;
+  state.logInsert({ death_save: { who, kind, prev } });
+  // Threshold handlers also log so rewind can restore precisely.
+  if (c.death_saves.failures >= 3) {
+    markDead(state, who);
+  } else if (c.death_saves.successes >= 3) {
+    stabilizeCombatant(state, who);
+  } else {
+    state.flush();
+  }
+}
+
+/** Auto-failure path: damage taken while down. Same as recordDeathSave("fail")
+ *  but logged as kind: "dmg_fail" so prose can distinguish "took a hit while
+ *  down" from a hand-rolled fail. */
+function recordDeathSaveFailure(state: EncounterState, who: string, kind: "dmg_fail"): void {
+  const c = state.getCombatant(who);
+  if (!c?.death_saves || c.death_saves.stable) return;
+  const prev = snapshotSaves(c);
+  c.death_saves.failures++;
+  state.logInsert({ death_save: { who, kind, prev } });
+  if (c.death_saves.failures >= 3) {
+    markDead(state, who);
+  } else {
+    state.flush();
+  }
+}
+
+/** Mark the downed PC as stable. Counts stay, stable: true is set, no
+ *  further saves are expected. Conscious is NOT restored (RAW: stable
+ *  PC is still unconscious until healed). */
+export function stabilizeCombatant(state: EncounterState, who: string): void {
+  const c = state.getCombatant(who);
+  if (!c?.death_saves) return;
+  const prev = snapshotSaves(c);
+  c.death_saves.stable = true;
+  state.logInsert({ death_save: { who, kind: "stabilized", prev } });
+  state.flush();
+}
+
+/** Revive: clear death_saves, drop the unconscious condition. Called when
+ *  healing lands (commitHeal) or the DM hits Nat 20. Also clears damage_taken
+ *  to the heal amount in the heal path; here we just handle the state flip. */
+export function reviveFromDeathSaves(state: EncounterState, who: string): void {
+  const c = state.getCombatant(who);
+  if (!c?.death_saves) return;
+  const prev = snapshotSaves(c);
+  c.death_saves = undefined;
+  c.conditions = c.conditions.filter((x) => x !== "unconscious");
+  state.logInsert({ death_save: { who, kind: "revived", prev } });
+  state.flush();
+}
+
+/** Nat-20 self-revive on a death save: regain 1 HP and wake up. Caller is
+ *  responsible for resetting damage_taken (we reset to PC max-1, but with
+ *  no max_hp tracked on PCs we just clear damage_taken to 0 less 1 HP --
+ *  effectively "1 HP" meaning "barely conscious"). */
+export function nat20Revive(state: EncounterState, who: string): void {
+  const c = state.getCombatant(who);
+  if (!c?.death_saves) return;
+  // damage_taken accumulates; "1 HP" means the PC is mostly damaged but
+  // back up. Without max_hp we can't compute exact damage_taken; the DM
+  // can adjust manually. We reset death_saves and clear unconscious.
+  reviveFromDeathSaves(state, who);
+}
+
+function markDead(state: EncounterState, who: string): void {
+  const c = state.getCombatant(who);
+  if (!c) return;
+  const prev = snapshotSaves(c);
+  c.death_saves = undefined;
+  if (!c.conditions.includes("dead")) c.conditions.push("dead");
+  c.conditions = c.conditions.filter((x) => x !== "unconscious");
+  state.logInsert({ death_save: { who, kind: "dead", prev } });
+  // Drop concentration on death (same as NPC death path).
+  if (c.concentration) dropConcentration(state, who);
+  state.flush();
 }

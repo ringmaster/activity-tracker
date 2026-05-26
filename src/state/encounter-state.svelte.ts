@@ -5,6 +5,7 @@ import type {
   AuthoredCounter,
   EncounterData,
   AuthoredEncounterData,
+  ReadiedActionSnapshot,
   Spell,
   Zone,
 } from "../types/encounter";
@@ -48,6 +49,10 @@ export class EncounterState {
   lastTargetIds = $state<string[]>([]);
   /** Currently selected target IDs in the action bar (transient, for when_targeted banners). */
   pendingTargetIds = $state<string[]>([]);
+  /** Transient slot for the actor-dropdown Ready button to hand the snapshot
+   *  to ActionFields on the next mount. ActionFields reads it at init and
+   *  clears it. Not persisted. */
+  resumingReadiedFrom = $state<ReadiedActionSnapshot | null>(null);
 
   // Derived values
   sortedCombatants = $derived(
@@ -342,7 +347,12 @@ function fillCombatantDefaults(partial: Partial<Combatant> & { id: string; name:
   if (partial.riders) base.riders = partial.riders;
   if (partial.rider_uses) base.rider_uses = partial.rider_uses;
   if (partial.action_uses) base.action_uses = partial.action_uses;
+  if (partial.readied_action) base.readied_action = partial.readied_action;
   if (partial.class_level) base.class_level = partial.class_level;
+  if (partial.resistances) base.resistances = partial.resistances;
+  if (partial.immunities) base.immunities = partial.immunities;
+  if (partial.vulnerabilities) base.vulnerabilities = partial.vulnerabilities;
+  if (partial.death_saves) base.death_saves = partial.death_saves;
 
   return base;
 }

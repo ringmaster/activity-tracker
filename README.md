@@ -2,6 +2,40 @@
 
 An Obsidian plugin for tracking initiative, actions, and NPC behavior during D&D 5e combat encounters. Designed for at-the-table use on an iPad Mini in reading view.
 
+## Design philosophy
+
+These are the load-bearing axioms behind the plugin. They explain why some things work the way they do, and why other things deliberately don't exist.
+
+### State lives in the vault, not in a separate database.
+Encounter state is a YAML codeblock inside the markdown note you wrote it in. There's no external storage, no sync server, no separate save file. The log of what happened during play writes back to the same block. This makes encounters diffable, hand-editable, copy-pasteable, and version-controllable through whatever you already use (Obsidian Sync, git, iCloud). If a typo creeps in, fix it; if a combatant's HP is wrong mid-combat, edit the block and the view reloads. (A higher-level encounter builder may layer on top eventually; it'll generate YAML rather than replace it.)
+
+### Positions are zones, not coordinates.
+Movement verbs are narrative ("closes", "separates", "flies"), never measured in feet. Combatants live in loose zones ("On the bridge", "Below the bridge") instead of grid squares. Range checks nudge ("requires melee; target is in another zone") but never block. If you want a battle map, use a different tool; this one is for the DM holding one screen while narrating.
+
+### The plugin records what happened; it doesn't legislate what can happen.
+Damage amounts are entered by the DM, not rolled by the plugin. Spell slots have a data model but aren't enforced or surfaced. Concentration is tracked because forgetting it changes the story; action economy isn't, because the DM is already counting. Riders, custom verbs, free-text triggers, and the Ready chit exist because real tables don't play strictly by the book. The dice on the table are authoritative; the plugin remembers things accurately, it doesn't referee.
+
+### The bar must work one-handed with the DM's eyes on the table.
+Built for iPad Mini and iPhone. 44px touch targets, 16px font (no iOS zoom on focus), sticky bar at the top of the viewport, dropdowns constrained inside the visible area. Defaults aggressively: last-used targets persist within a turn; the attack preset opens with the target picker; double-tap an empty damage input to roll its dice. The DM is looking at the table 80% of the time; the bar is for the 20%.
+
+### Reminders fire when they matter; the screen never becomes a dashboard.
+The things that would otherwise slip past (a spell effect that fires on the target's turn, a concentration save that should follow damage landing, an aura that triggers when an enemy enters its area) surface as banners or pills exactly when they matter, not as a list of fifty things the DM has to scan. Most combat tools are dashboards: everything visible, nothing prompted, the DM does the scanning. This one stays quiet until the moment, then taps you on the shoulder.
+
+### The log must read as narration so an AI can turn it into a story.
+Every action commits as a structured log entry, and the rendered log reads as prose: "Anya attacked Goblin 1 dealing 8 slashing + 4 slashing (Trip Attack) with Longsword. Goblin 1 is prone." The intent is that this log, fed to an AI along with the scenario doc and the PC writeups, reconstructs into a story-like account of the session. Scrollback during play and end-of-session chronicle generation fall out of the same artifact. The structure underneath powers precise undo, cascade rewind, and time-travel through the turn history.
+
+### Every commit composes from the same primitives; nothing gets its own wizard.
+The action bar accumulates chits as you build a commit: damage + condition + tag + heal + concentration + counter + ready, in any combination. Most things a DM does at the table are a single tap plus a number; complex combinations (a spell with deferred damage plus a save plus a condition) compose from the same primitives instead of demanding their own modal flow. The Ready chit slots into this exactly: it's just another modal chit that changes how the commit resolves.
+
+### Every action must be undoable, and undo must respect causality.
+Cascade rewind walks downstream: pulling a fireball back also pulls back the deaths and conditions it caused. This trades complexity in the rewind machinery for the freedom to commit fast at the table without fearing typos. The log is the audit trail; clear an entry and the encounter state reconciles itself.
+
+### Knowledge accretes across sessions; the DM never retypes the same template twice.
+Library YAML files scanned from the vault (individually toggled in settings) provide standard actions, SRD spells, and weapons. PCs reference these libraries by name instead of duplicating definitions. When a PC uses a new spell mid-combat, the plugin writes it back to the party note for next time. Statblocks, riders, and counter ladders are first-class entries you write once and reuse.
+
+### PC-specific abilities stack on the main action; they don't replace it.
+Riders (Sneak Attack, Divine Smite, Trip Attack, Reckless Attack, metamagic toggles, custom homebrew per-PC tricks) are stackable chips that piggyback on the main action; they add damage, conditions, or modifiers to whatever the PC is doing, rather than being separate actions in their own right. The DM doesn't need to remember every PC's gimmicks; the relevant chips appear when applicable and decrement their own use counters (Sneak Attack once per turn; maneuver dice per short rest).
+
 ## Installation
 
 1. Build the plugin: `npm install && npm run build`

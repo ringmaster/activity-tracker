@@ -1380,6 +1380,13 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   white-space: nowrap;
 }
 
+/* The container-scoped `.dnd-combat-bar-container button { min-height: 44px }`
+ * rule (touch-target baseline) outranks the bare `.dnd-effect-remove`
+ * selector on specificity, so without the bar-scoped override below the X
+ * button balloons to 44px and drags effect widgets past their intended
+ * height (most visibly on the Ready chit). Repeat the container path here
+ * to win specificity, then explicitly clamp the size. */
+.dnd-combat-bar-container .dnd-effect-remove,
 .dnd-effect-remove {
   display: flex;
   align-items: center;
@@ -1550,9 +1557,9 @@ body.dnd-ios-phone .dnd-combat-bar-container {
 .dnd-auto-tags-pill {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px 10px;
-  min-height: 36px !important;
+  gap: 4px;
+  padding: 4px 8px;
+  min-height: 44px !important;
   min-width: 0 !important;
   border: 1px solid #2a4a5e;
   border-radius: 6px;
@@ -1564,6 +1571,42 @@ body.dnd-ios-phone .dnd-combat-bar-container {
 
 .dnd-auto-tags-pill.active {
   background: #1a3a4e;
+}
+
+/* Tag-glyph: 24px square with the SVG outline and the count layered on top.
+ * The count sits slightly left of center to land inside the tag body (the
+ * shape's pointed end is at top-right, so its visual center is biased
+ * down-left). */
+.dnd-auto-tags-glyph {
+  position: relative;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+}
+
+.dnd-auto-tags-glyph svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.dnd-auto-tags-count {
+  position: absolute;
+  top: 56%;
+  left: 42%;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--background-primary);
+  line-height: 1;
+  pointer-events: none;
+}
+
+.dnd-auto-tags-caret {
+  font-size: 10px;
+  line-height: 1;
 }
 
 .dnd-implicit-move-pill {
@@ -1616,6 +1659,59 @@ body.dnd-ios-phone .dnd-combat-bar-container {
 .dnd-failed-widget .dnd-effect-label {
   color: var(--text-error);
   font-weight: 600;
+}
+
+/* The Ready chit lives at the bar's top-level row alongside the Via input
+ * and Commit button, so it has to match their min-height (44px) and inner
+ * padding rather than the smaller .dnd-effect-widget defaults used by the
+ * effects row below. */
+.dnd-ready-widget {
+  border-color: #d4a05c;
+  min-height: 44px;
+  padding: 4px 8px;
+  gap: 4px;
+}
+
+.dnd-ready-widget .dnd-effect-label {
+  color: #d4a05c;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* ---------- Actor-dropdown readied resume buttons ---------- */
+.dnd-readied-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px;
+}
+
+.dnd-ready-resume {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #d4a05c;
+  border-radius: 999px;
+  background: var(--background-primary);
+  color: #d4a05c;
+  font-size: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 32px;
+}
+
+.dnd-ready-resume:active {
+  background: var(--background-modifier-hover);
+}
+
+.dnd-ready-resume-name {
+  font-weight: 600;
+}
+
+.dnd-ready-resume-label {
+  color: var(--text-muted);
+  font-weight: 400;
 }
 
 /* ---------- Inline actions row ---------- */
@@ -1728,4 +1824,139 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   font-weight: 700;
   font-size: 18px;
   color: var(--text-success);
+}
+
+/* ---------- Statblock autocomplete (Add Combatant form) ---------- */
+.dnd-statblock-autocomplete {
+  flex: 1 1 140px;
+  min-width: 140px;
+}
+
+.dnd-statblock-autocomplete > .dnd-action-input {
+  width: 100%;
+}
+
+/* Suggestions render in normal flow (NOT absolutely positioned) because
+ * the parent .dnd-dropdown has overflow-y: auto, which clips absolutely-
+ * positioned descendants that would land below the dropdown's
+ * 50vh max-height viewport. In-flow rendering trades a small layout
+ * jitter (other form controls push down briefly) for guaranteed
+ * visibility. The Suggestions list is a flex-basis: 100% sibling of the
+ * autocomplete container so it wraps onto its own line below the row. */
+.dnd-statblock-suggestions {
+  flex-basis: 100%;
+  margin: 4px 0 0 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.dnd-statblock-suggestion {
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-normal);
+}
+
+.dnd-statblock-suggestion:hover {
+  background: var(--background-modifier-hover);
+}
+
+.dnd-statblock-pick-hint {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+/* "statblock" button beside the current-actor's name. Compact pill --
+ * it's a quick lookup affordance, not a primary control, so it stays
+ * smaller than the surrounding bar/end buttons. */
+.dnd-statblock-open-btn {
+  min-height: 22px !important;
+  min-width: 0 !important;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.dnd-statblock-open-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.dnd-add-confirm {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+/* ---------- Death saves widget ---------- */
+.dnd-death-saves {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px 0;
+}
+
+.dnd-death-saves-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.dnd-death-dots {
+  display: inline-flex;
+  gap: 2px;
+  line-height: 1;
+}
+
+.dnd-death-dot {
+  font-size: 14px;
+  color: var(--background-modifier-border);
+}
+
+.dnd-death-dot.success.on {
+  color: var(--text-success, #4dbf6e);
+}
+
+.dnd-death-dot.fail.on {
+  color: var(--text-error, #d84a4a);
+}
+
+.dnd-death-stable {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-success, #4dbf6e);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 0 4px;
+}
+
+.dnd-death-btn {
+  min-height: 28px !important;
+  min-width: 0 !important;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.dnd-mark-down-btn {
+  min-height: 28px !important;
+  padding: 2px 10px;
+  font-size: 12px;
+  border-color: var(--text-error, #d84a4a);
+  color: var(--text-error, #d84a4a);
 }
