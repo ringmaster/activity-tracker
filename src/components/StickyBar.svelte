@@ -10,6 +10,7 @@
   import { summarizeLogEntry } from "../utils/log-summary";
   import DefaultBar from "./bar/DefaultBar.svelte";
   import ActionBar from "./bar/ActionBar.svelte";
+  import DeathSaveBar from "./bar/DeathSaveBar.svelte";
   import BannerStack from "./banners/BannerStack.svelte";
   import TargetsDropdown from "./dropdowns/TargetsDropdown.svelte";
 
@@ -449,6 +450,33 @@
   }
 
   let isActionActive = $derived(encounter.activeAction !== null);
+
+  /** When a down PC is the effective actor, the death-save bar replaces
+   *  the default bar by default. This flag lets the DM flip to the
+   *  regular bar temporarily (to heal, cast self-buff, etc.); the death-
+   *  save bar's leftmost button toggles it, and a small button on the
+   *  default bar (added inline below) toggles it back. The flag clears
+   *  automatically when the down state ends or the actor changes. */
+  let showActionBarForDownActor = $state(false);
+  let downActor = $derived(
+    encounter.effectiveActor?.death_saves && !encounter.effectiveActor.death_saves.stable
+      ? encounter.effectiveActor
+      : null,
+  );
+  // Reset the override flag when the effective actor changes or stops
+  // being down. Otherwise a stale toggle persists past the situation it
+  // belonged to.
+  let lastDownActorId = $state<string | null>(null);
+  $effect(() => {
+    const id = downActor?.id ?? null;
+    if (id !== lastDownActorId) {
+      lastDownActorId = id;
+      showActionBarForDownActor = false;
+    }
+  });
+  let showDeathSaveBar = $derived(
+    downActor !== null && !isActionActive && !showActionBarForDownActor,
+  );
   let combatOver = $derived(encounter.allNPCsDead);
 
   // Ladder rungs that have been crossed but not yet acknowledged.
@@ -488,8 +516,13 @@
   </div>
 {:else if isActionActive}
   <ActionBar {encounter} />
+{:else if showDeathSaveBar}
+  <DeathSaveBar {encounter} onToggle={() => { showActionBarForDownActor = true; }} />
 {:else}
-  <DefaultBar {encounter} />
+  <DefaultBar
+    {encounter}
+    downReturn={downActor && showActionBarForDownActor ? () => { showActionBarForDownActor = false; } : undefined}
+  />
 {/if}
 
 {#if turnHint && !isActionActive}

@@ -794,6 +794,8 @@ body.dnd-ios-phone .dnd-combat-bar-container {
 .dnd-icon-heal   { color: #e04040; }
 .dnd-icon-move   { color: #60b0e0; }
 .dnd-icon-note   { color: #d4a05c; }
+.dnd-icon-skull  { color: #d4a05c; }
+.dnd-icon-heart  { color: #e04040; }
 
 /* When the leftmost button is in its "active preset" state (highlighted
  * accent background), invert the icon to the on-accent color so it stays
@@ -875,6 +877,16 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   background: var(--text-error);
   color: var(--text-on-accent);
   font-weight: 600;
+}
+
+/* PC death-save pills: DOWN (actively dying) and STABLE (no more saves
+ * but still unconscious). Same slot as DEAD/FLED, distinct colors. */
+.dnd-combatant-tag.down {
+  background: var(--text-warning, #d4a05c);
+}
+
+.dnd-combatant-tag.stable {
+  background: var(--text-success, #4dbf6e);
 }
 
 .dnd-combatant-init {
@@ -1485,11 +1497,43 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   color: var(--text-error);
 }
 
+/* + menu (effect picker): 3-column grid that lays the options out as
+ * compact tiles, anchored under the + button. max-height + overflow keep
+ * it inside the viewport on tight bars. */
 .dnd-effect-picker {
   position: absolute;
   top: 100%;
   right: 0;
-  min-width: 120px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(110px, 1fr));
+  gap: 4px;
+  padding: 6px;
+  min-width: 360px;
+  max-width: 100vw;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.dnd-effect-picker .dnd-dropdown-row {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8px;
+  gap: 2px;
+  min-height: 56px;
+  white-space: normal;
+  text-align: left;
+}
+
+.dnd-effect-picker .dnd-via-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.dnd-effect-picker .dnd-via-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.2;
 }
 
 /* ---------- Add target form ---------- */
@@ -2101,4 +2145,152 @@ body.dnd-ios-phone .dnd-combat-bar-container {
 
 .dnd-target-btn.active .dnd-target-ac {
   color: var(--text-on-accent);
+}
+
+/* ---------- Down chit (effect widget) ---------- */
+.dnd-down-widget {
+  border-color: var(--text-warning, #d4a05c);
+}
+
+.dnd-down-label {
+  color: var(--text-warning, #d4a05c);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dnd-down-icon {
+  display: inline-flex;
+  line-height: 0;
+  color: var(--text-warning, #d4a05c);
+}
+
+.dnd-down-icon svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.dnd-down-icon svg path,
+.dnd-down-icon svg g {
+  fill: currentColor;
+}
+
+/* ---------- Death-save bar ---------- */
+.dnd-death-save-bar {
+  align-items: center;
+}
+
+/* STABLE caption sits at its natural width between the toggle and the
+ * action buttons -- no flex: 1 that would push them apart. */
+.dnd-death-save-stable {
+  padding: 0 12px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  font-size: 14px;
+  color: var(--text-success, #4dbf6e);
+}
+
+.dnd-death-save-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Each dot is a small circle; the .filled state replaces the dot ring
+ * with a heart/skull icon. The success/fail slots are visually
+ * separated by a wider middle gap (margin on the third success dot). */
+.dnd-death-save-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--background-modifier-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background-secondary);
+}
+
+.dnd-death-save-dot.dnd-death-save-success:nth-of-type(3) {
+  margin-right: 10px;
+}
+
+.dnd-death-save-dot.filled {
+  border-color: transparent;
+  background: transparent;
+}
+
+.dnd-death-save-dot .dnd-action-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+/* Small in-dot icons: white fill with a 1px black outline (via stacked
+ * drop-shadows) so they read cleanly against any bar background. */
+.dnd-death-save-dot .dnd-action-icon svg path,
+.dnd-death-save-dot .dnd-action-icon svg g {
+  fill: #ffffff;
+}
+
+.dnd-death-save-dot .dnd-action-icon svg {
+  filter:
+    drop-shadow(0 1px 0 #000)
+    drop-shadow(1px 0 0 #000)
+    drop-shadow(0 -1px 0 #000)
+    drop-shadow(-1px 0 0 #000);
+}
+
+/* Bar buttons (toggle skull, fail skull, success heart) need explicit
+ * SVG sizing because ACTION_ICONS.skull / .heart go through unsized() so
+ * CSS owns the dimensions. 20px matches the rest of the bar icons. The
+ * in-dot icons keep their 18px size from the more-specific rule above. */
+.dnd-death-save-bar .dnd-bar-btn .dnd-action-icon svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.dnd-death-save-bar .dnd-bar-btn .dnd-action-icon svg path,
+.dnd-death-save-bar .dnd-bar-btn .dnd-action-icon svg g {
+  fill: currentColor;
+}
+
+.dnd-death-save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dnd-death-save-fail-btn .dnd-action-icon { color: var(--text-warning, #d4a05c); }
+.dnd-death-save-success-btn .dnd-action-icon { color: #e04040; }
+
+.dnd-death-save-stabilize-btn {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-success, #4dbf6e);
+}
+
+/* Toggle skull is on an .active button (accent background); invert the
+ * icon to on-accent so it reads against the yellow. */
+.dnd-death-save-toggle.active .dnd-action-icon {
+  color: var(--text-on-accent);
+}
+
+/* Return-to-death-save button on the regular bar. Small skull icon
+ * sized like the rest of the bar icons. */
+.dnd-bar-death-return .dnd-action-icon {
+  color: var(--text-warning, #d4a05c);
+}
+
+.dnd-bar-death-return .dnd-action-icon svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.dnd-bar-death-return .dnd-action-icon svg path,
+.dnd-bar-death-return .dnd-action-icon svg g {
+  fill: currentColor;
 }

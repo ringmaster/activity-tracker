@@ -9,6 +9,7 @@ import heartCirclePlus from "./sharp-solid-heart-circle-plus-full.svg";
 import personRunning from "./person-running-sharp-solid-full.svg";
 import pagePen from "./sharp-solid-page-pen-full.svg";
 import shieldHalved from "./shield-halved-sharp-solid-full.svg";
+import skull from "./skull-solid-full.svg";
 
 /** Inject explicit width/height attributes onto an SVG string. Used for
  *  fixed-pixel icons on bar buttons. Icons that should track font-size
@@ -43,4 +44,6 @@ export const ACTION_ICONS = {
   // Inline icons that size with surrounding text. CSS sets width/height
   // in em so they track font-size and line-height naturally.
   shield: unsized(shieldHalved),
+  skull: unsized(skull),
+  heart: unsized(heartCirclePlus),
 };

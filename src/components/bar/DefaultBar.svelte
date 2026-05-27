@@ -4,7 +4,14 @@
   import { ACTION_ICONS } from "../../icons/action-icons";
   import ActorDropdown from "../dropdowns/ActorDropdown.svelte";
 
-  let { encounter }: { encounter: EncounterState } = $props();
+  let { encounter, downReturn }: {
+    encounter: EncounterState;
+    /** When the effective actor is in death-save state but the DM has
+     *  flipped to the regular bar, this callback flips back. StickyBar
+     *  passes it whenever the current actor is down + override is active;
+     *  otherwise undefined. */
+    downReturn?: () => void;
+  } = $props();
 
   let showActorDropdown = $state(false);
 
@@ -74,6 +81,17 @@
   <button class="dnd-bar-btn" onclick={() => setAction("heal")} title="Heal"><span class="dnd-action-icon dnd-icon-heal">{@html ACTION_ICONS.heal}</span></button>
   <button class="dnd-bar-btn" onclick={() => setAction("move")} title="Move"><span class="dnd-action-icon dnd-icon-move">{@html ACTION_ICONS.move}</span></button>
   <button class="dnd-bar-btn" onclick={() => setAction("note")} title="Note"><span class="dnd-action-icon dnd-icon-note">{@html ACTION_ICONS.note}</span></button>
+
+  {#if downReturn}
+    <!-- Reminder + return path: the active actor is in death-save state
+         but the DM toggled to this regular bar. Tap to flip back to
+         the death-save bar. -->
+    <button
+      class="dnd-bar-btn dnd-bar-death-return"
+      onclick={downReturn}
+      title="Return to death-save bar"
+    ><span class="dnd-action-icon dnd-icon-skull">{@html ACTION_ICONS.skull}</span></button>
+  {/if}
 
   <button class="dnd-bar-btn" onclick={handleNext} title="Next turn">&#9654;</button>
 </div>

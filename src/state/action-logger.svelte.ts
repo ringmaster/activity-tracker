@@ -146,6 +146,23 @@ export function commitHeal(state: EncounterState, params: HealParams): void {
       if (t.hp > 0 && combatant.death_saves) {
         reviveFromDeathSaves(state, combatant.id);
       }
+      // Healing also lifts the "dead" condition off a fallen PC. The
+      // table's convention here is looser than RAW (which reserves
+      // revivification for Revivify et al.); the DM chose generic heals
+      // to count. Drop the dead marker and the unconscious flag so the
+      // PC returns to the action.
+      if (t.hp > 0 && combatant.conditions.includes("dead")) {
+        combatant.conditions = combatant.conditions.filter(
+          (c) => c !== "dead" && c !== "unconscious",
+        );
+        state.logInsert({
+          effect_ends: {
+            what: "dead",
+            on: combatant.id,
+            reason: "healed",
+          },
+        });
+      }
     }
   }
 
@@ -267,6 +284,14 @@ function learnAction(
     if (!actor.actions) actor.actions = [];
     actor.actions.push(newAction);
   }
+}
+
+/** Re-exported under an explicit name so the bar's "Down" chit can drain
+ *  an NPC's remaining HP directly (going through the standard damage
+ *  cascade: 0-HP dead condition, log entry, concentration drop). PCs use
+ *  markDown instead -- they don't go through this path. */
+export function applyDamageDirect(state: EncounterState, targetId: string, amount: number): void {
+  applyDamage(state, targetId, amount);
 }
 
 function applyDamage(state: EncounterState, targetId: string, amount: number): void {

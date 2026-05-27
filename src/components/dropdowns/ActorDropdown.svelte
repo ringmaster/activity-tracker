@@ -3,13 +3,6 @@
   import type { Combatant, Counter, LadderRung } from "../../types/encounter";
   import { addCombatant, endEncounter } from "../../state/combat-engine.svelte";
   import { tickCounter } from "../../state/counter-engine.svelte";
-  import {
-    markDown,
-    recordDeathSave,
-    stabilizeCombatant,
-    nat20Revive,
-    reviveFromDeathSaves,
-  } from "../../state/action-logger.svelte";
   import { getCreature, getCreatureNames, openStatblockView } from "../../state/statblocks-api";
   import { STATBLOCK_ICON } from "../../icons/target-icons";
 
@@ -289,39 +282,10 @@
           {/each}
         </div>
       {/if}
-      {#if actor.type === "pc"}
-        {#if actor.death_saves}
-          <div class="dnd-death-saves">
-            <span class="dnd-death-saves-label">Death saves:</span>
-            <span class="dnd-death-dots">
-              {#each [0, 1, 2] as i}
-                <span class="dnd-death-dot success" class:on={(actor.death_saves.successes ?? 0) > i}>●</span>
-              {/each}
-            </span>
-            <span class="dnd-death-dots">
-              {#each [0, 1, 2] as i}
-                <span class="dnd-death-dot fail" class:on={(actor.death_saves.failures ?? 0) > i}>✗</span>
-              {/each}
-            </span>
-            {#if actor.death_saves.stable}
-              <span class="dnd-death-stable">stable</span>
-              <button class="dnd-bar-btn dnd-death-btn" onclick={() => reviveFromDeathSaves(encounter, actor.id)}>Revive</button>
-            {:else}
-              <button class="dnd-bar-btn dnd-death-btn" onclick={() => recordDeathSave(encounter, actor.id, "pass")}>Pass</button>
-              <button class="dnd-bar-btn dnd-death-btn" onclick={() => recordDeathSave(encounter, actor.id, "fail")}>Fail</button>
-              <button class="dnd-bar-btn dnd-death-btn" onclick={() => recordDeathSave(encounter, actor.id, "crit_fail")} title="Nat 1: counts as two failures">Nat 1</button>
-              <button class="dnd-bar-btn dnd-death-btn" onclick={() => nat20Revive(encounter, actor.id)} title="Nat 20: regain consciousness at 1 HP">Nat 20</button>
-              <button class="dnd-bar-btn dnd-death-btn" onclick={() => stabilizeCombatant(encounter, actor.id)}>Stabilize</button>
-            {/if}
-          </div>
-        {:else if !actor.conditions.includes("dead")}
-          <div>
-            <button class="dnd-bar-btn dnd-mark-down-btn" onclick={() => markDown(encounter, actor.id)}>
-              Mark down (0 HP)
-            </button>
-          </div>
-        {/if}
-      {/if}
+      <!-- Death-save controls used to live here; they moved to the
+           dedicated DeathSaveBar (auto-shown on the action bar when the
+           current actor is down). The bar's leftmost skull toggles
+           between death-save and regular action bars. -->
       {#if actor.spell_slots && Object.values(actor.spell_slots).some((s) => s.max > 0)}
         <div style="font-size: 12px; color: var(--text-muted);">
           Slots: {#each Object.entries(actor.spell_slots).filter(([_, s]) => s.max > 0) as [level, slot]}

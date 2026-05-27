@@ -87,6 +87,7 @@
   let hasStatus = $derived(
     isDead ||
       isFled ||
+      !!combatant.death_saves ||
       visibleConditions.length > 0 ||
       (combatant.tags?.length ?? 0) > 0,
   );
@@ -123,6 +124,10 @@
       <span class="dnd-combatant-tag">DEAD</span>
     {:else if isFled}
       <span class="dnd-combatant-tag fled">FLED</span>
+    {:else if combatant.death_saves?.stable}
+      <span class="dnd-combatant-tag stable">STABLE</span>
+    {:else if combatant.death_saves}
+      <span class="dnd-combatant-tag down">DOWN</span>
     {/if}
     {#each visibleConditions as cond}
       <!-- svelte-ignore a11y_no_static_element_interactions -->

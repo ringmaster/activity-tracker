@@ -5,7 +5,7 @@
   import { constrainToViewport } from "../../utils/constrain-to-viewport.svelte";
   import { rollDiceExpression } from "../../utils/dice";
   import { renderSpellDescription } from "../../utils/spell-renderer";
-  import { commitAttack, commitHeal, dropConcentration } from "../../state/action-logger.svelte";
+  import { commitAttack, commitHeal, dropConcentration, markDown, applyDamageDirect } from "../../state/action-logger.svelte";
   import { tickCounter } from "../../state/counter-engine.svelte";
   import { generateSpellTag, generateConcentrationTag } from "../../data/spell-tag-generator";
   import { findLibraryAction, searchLibrary } from "../../state/library-loader";
@@ -16,7 +16,7 @@
   import { PREPOSITION_ICONS, BUILTIN_PREPOSITIONS } from "../../icons/preposition-icons";
   import { ACTION_ICONS } from "../../icons/action-icons";
 
-  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "counter" | "move" | "failed" | "ready";
+  type EffectType = "damage" | "condition" | "heal" | "tag" | "concentration" | "counter" | "move" | "failed" | "ready" | "down";
 
   interface DamageEffect {
     type: "damage";
@@ -63,7 +63,16 @@
     type: "ready";
   }
 
-  type SpellEffect = DamageEffect | ConditionEffect | HealEffect | TagEffect | ConcentrationEffect | CounterEffect | FailedEffect | ReadyEffect;
+  /** "Down" chit: every checked target gets knocked down on commit. PCs
+   *  enter the death-save tracker (markDown); NPCs/objects drop to 0 HP
+   *  and get the "dead" condition. Used to attribute the killing/downing
+   *  blow to the current commit so the log reads "Garrick attacked Bandit
+   *  dealing 22 piercing. Bandit dies." */
+  interface DownEffect {
+    type: "down";
+  }
+
+  type SpellEffect = DamageEffect | ConditionEffect | HealEffect | TagEffect | ConcentrationEffect | CounterEffect | FailedEffect | ReadyEffect | DownEffect;
 
   const COMMON_CONDITIONS = [
     "blinded", "charmed", "deafened", "frightened", "grappled",
@@ -822,6 +831,10 @@
       if (!effects.some((e) => e.type === "ready")) {
         effects = [...effects, { type: "ready" }];
       }
+    } else if (effectType === "down") {
+      if (!effects.some((e) => e.type === "down")) {
+        effects = [...effects, { type: "down" }];
+      }
     }
     showEffectPicker = false;
     focusFirstEffectInput();
@@ -1327,6 +1340,29 @@
       }
     }
 
+    // --- Down chit ---
+    // Knock every selected target down. PCs enter the death-save tracker
+    // (markDown adds the unconscious condition + logs the downed event);
+    // NPCs/objects drop to 0 HP and pick up the "dead" condition through
+    // the standard applyDamage path. The commit's attack/heal entry is
+    // already logged above, so the prose reads "X attacks Y dealing 22.
+    // Y is down."
+    if (effects.some((e) => e.type === "down")) {
+      for (const t of selectedTargets) {
+        const c = encounter.getCombatant(t.who);
+        if (!c) continue;
+        if (c.type === "pc") {
+          if (!c.death_saves) markDown(encounter, c.id);
+        } else if (c.hp) {
+          // Drain remaining HP. applyDamage handles the death cascade
+          // (concentration drop, dead condition, log entry).
+          if (c.hp.current > 0) {
+            applyDamageDirect(encounter, c.id, c.hp.current);
+          }
+        }
+      }
+    }
+
     encounter.lastTargetIds = selectedTargets.map((t) => t.who);
     encounter.flush();
     onDone();
@@ -1502,6 +1538,14 @@
         <span class="dnd-effect-label">&#9201; Ready</span>
         <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
       </div>
+    {:else if effect.type === "down"}
+      <div class="dnd-effect-widget dnd-down-widget" title="On commit: PCs enter death saves; NPCs/objects drop to 0 HP">
+        <span class="dnd-effect-label dnd-down-label">
+          <span class="dnd-down-icon">{@html ACTION_ICONS.skull}</span>
+          Down
+        </span>
+        <button class="dnd-effect-remove" onclick={() => removeEffect(idx)}>&times;</button>
+      </div>
     {/if}
   {/each}
 
@@ -1622,6 +1666,10 @@
         <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("failed")}>
           <span class="dnd-via-name">{preset === "attack" ? "Miss" : "Failed"}</span>
           <span class="dnd-via-detail">action has no effect</span>
+        </button>
+        <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("down")}>
+          <span class="dnd-via-name">Down</span>
+          <span class="dnd-via-detail">PC enters death saves; NPC drops to 0 HP</span>
         </button>
       </div>
     {/if}
