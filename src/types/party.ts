@@ -58,9 +58,16 @@ export interface RiderEffect {
   trigger?: string;
   /** When true on a tag/condition rider effect, an effect_ends entry is
    *  emitted automatically AFTER the riding action commits (with
-   *  reason: action_consumed). Use for "consumed by the action it rode on"
-   *  abilities like Cunning Hide. */
+   *  reason: action_consumed). Use for short-duration one-shot effects
+   *  whose lifetime is exactly the action they rode on. NOT the right
+   *  choice for stealth-style "lasts until broken" effects -- those
+   *  should use `autoRemove: when_self_attacks` on the tag instead. */
   consumed?: boolean;
+  /** Overrides the auto-remove behavior of a tag rider's resulting
+   *  CombatTag. Defaults to "manual" (i.e. the DM clears it). The
+   *  CombatTag-level union is the authoritative list of supported
+   *  values; the engine reads this field at tag-push time. */
+  autoRemove?: "manual" | "on_save" | "on_source_end" | "when_damaged" | "when_self_attacks";
 }
 
 export interface Rider {

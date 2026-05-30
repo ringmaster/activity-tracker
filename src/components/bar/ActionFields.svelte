@@ -105,6 +105,7 @@
   let showTargets = $state(preset === "attack" && encounter.lastTargetIds.length === 0);
   let showViaSuggestions = $state(false);
   let showEffectPicker = $state(false);
+  let showRiderPicker = $state(false);
   let showAutoTags = $state(false);
   let addingTarget = $state(false);
 
@@ -121,6 +122,7 @@
     showTargets = false;
     showViaSuggestions = false;
     showEffectPicker = false;
+    showRiderPicker = false;
   }
   let spellKey = $state(resumeSnapshot?.spellKey ?? "");
   let isConc = $state(resumeSnapshot?.isConc ?? false);
@@ -460,6 +462,10 @@
     const checked = checkedTargetIds;
     const actorName = encounter.effectiveActor?.name ?? "?";
     const warn = selfTargetWarning ? " \u26A0\uFE0F" : "";
+    // Aura actions resolve targets per trigger, not at invocation. The
+    // chip just reads "→ aura" so the bar stays compact; the full side and
+    // range surface as a header inside the dropdown when tapped.
+    if (auraInfo) return "→ aura";
     if (checked.length === 0) {
       return preset === "attack" ? `${actorName} \u2192` : `${actorName} \u2192 Self`;
     }
@@ -481,6 +487,35 @@
     const c = encounter.getCombatant(checkedTargetIds[0]);
     return typeof c?.ac === "number" ? c.ac : null;
   });
+
+  /** "Aura" actions resolve their per-turn targets at trigger time rather
+   *  than at invocation (Twilight Sanctuary, Spirit Guardians). Detection:
+   *  the action has at least one effect on ally/enemy with a per-turn
+   *  trigger, and no immediate-target effects. When true, the bar should
+   *  display an aura chip in place of the target picker and let the commit
+   *  through without selectedTargets. */
+  let auraInfo = $derived.by<{ on: "ally" | "enemy" | "all"; range?: string } | null>(() => {
+    const lib = selectedLibAction;
+    if (!lib?.effects?.length) return null;
+    const perTurnTriggers = new Set(["on_ally_turn", "on_enemy_turn", "start_of_turn", "end_of_turn"]);
+    let auraOn: "ally" | "enemy" | "all" | null = null;
+    let auraRange: string | undefined;
+    let hasImmediateTarget = false;
+    for (const e of lib.effects) {
+      const on = e.on;
+      if (e.trigger && perTurnTriggers.has(e.trigger) && (on === "ally" || on === "enemy")) {
+        if (!auraOn) auraOn = on;
+        else if (auraOn !== on) auraOn = "all";
+        auraRange = e.range ?? auraRange ?? lib.range;
+      } else if (on === "target" || on === "enemy" || on === "ally") {
+        // A non-aura effect that requires a chosen target makes this not a pure aura.
+        hasImmediateTarget = true;
+      }
+    }
+    if (!auraOn || hasImmediateTarget) return null;
+    return { on: auraOn, range: auraRange ?? lib.range };
+  });
+  let isAura = $derived(auraInfo !== null);
 
   // --- Selection ---
 
@@ -638,6 +673,7 @@
             _save: ae.save,
             _on: ae.on ?? "target",
             _autoRemove: ae.autoRemove,
+            _range: ae.range ?? action.range,
             _auto: true,
           } as any];
           autoTagIndices = new Set([...autoTagIndices, effects.length - 1]);
@@ -655,6 +691,7 @@
             _isHeal: true,
             _dice: ae.dice,
             _on: ae.on ?? "ally",
+            _range: ae.range ?? action.range,
             _auto: true,
           } as any];
           autoTagIndices = new Set([...autoTagIndices, effects.length - 1]);
@@ -897,7 +934,7 @@
     // Disengage that do no damage and apply only to the actor; for those,
     // default to self instead of refusing to commit.
     if (selectedTargets.length === 0) {
-      if (preset === "attack") {
+      if (preset === "attack" && !isAura) {
         const hasDamage = !!(
           (selectedLibAction?.dmg && selectedLibAction.dmg.length > 0)
           || selectedLibAction?.damageType
@@ -908,6 +945,8 @@
         );
         if (hasDamage || hasNonSelfEffect) return;
       }
+      // Auras commit with the caster as the only "target" so the log line
+      // reads "Wex invokes Twilight Sanctuary." via the selfOnly path.
       selectedTargets = [{ who: actor.id, outcome: "full" as const }];
     }
 
@@ -973,7 +1012,9 @@
                 note: eff.note,
                 trigger: (eff.trigger || undefined) as any,
                 onTrigger: eff.note,
-                autoRemove: "manual",
+                // Honor the rider effect's authored autoRemove (e.g.
+                // when_self_attacks for stealth tags); manual by default.
+                autoRemove: eff.autoRemove ?? "manual",
               });
               ids.push(tagId);
               appliedRiderTags.push({
@@ -1190,9 +1231,20 @@
         const tagAutoRemove = tagAny._autoRemove ?? "manual";
 
         if (hasDeferredEffect && (effectOn === "self" || effectOn === "enemy" || effectOn === "ally")) {
-          // Deferred effect on self/enemy/ally: tag goes on the ACTOR
-          // with resolveTarget pointing to the selected target(s)
-          const firstTarget = affectedTargetIds.find((id) => id !== actor.id) ?? affectedTargetIds[0];
+          // Deferred effect on self/enemy/ally: tag goes on the ACTOR.
+          // For aura tags (ally/enemy + per-turn trigger), the target is
+          // whoever's turn fires the banner -- so leave resolveTarget unset
+          // and stash auraTarget + range for the banner to interpret.
+          const perTurnTriggers = new Set([
+            "on_ally_turn", "on_enemy_turn", "start_of_turn", "end_of_turn",
+          ]);
+          const isAuraEffect =
+            (effectOn === "ally" || effectOn === "enemy") &&
+            tagEffect.trigger &&
+            perTurnTriggers.has(tagEffect.trigger);
+          const firstTarget = isAuraEffect
+            ? undefined
+            : (affectedTargetIds.find((id) => id !== actor.id) ?? affectedTargetIds[0]);
           const tagId = newTagId();
           actor.tags.push({
             id: tagId,
@@ -1207,7 +1259,11 @@
             dice: tagAny._dice || undefined,
             save: tagAny._save || undefined,
             isHeal: tagAny._isHeal || undefined,
-            resolveTarget: firstTarget !== actor.id ? firstTarget : undefined,
+            resolveTarget: !isAuraEffect && firstTarget && firstTarget !== actor.id
+              ? firstTarget
+              : undefined,
+            auraTarget: isAuraEffect ? (effectOn as "ally" | "enemy") : undefined,
+            range: tagAny._range || undefined,
             uses: tagUses,
             resetOn: tagResetOn,
           });
@@ -1625,9 +1681,11 @@
   <div style="position: relative;">
     <button
       class="dnd-bar-btn"
+      class:active={showEffectPicker}
       onclick={() => { const next = !showEffectPicker; closeAllDropdowns(); showEffectPicker = next; }}
       title="Add effect"
-    >+</button>
+      aria-label="Add effect"
+    ><span class="dnd-action-icon dnd-icon-plus">{@html ACTION_ICONS.plus}</span></button>
     {#if showEffectPicker}
       <div class="dnd-dropdown dnd-effect-picker" use:constrainToViewport>
         <button class="dnd-dropdown-row dnd-via-suggestion" onmousedown={() => addEffect("damage")}>
@@ -1675,27 +1733,42 @@
     {/if}
   </div>
 
-  <!-- Inactive rider chips (right of `+`, behind a visual separator) -->
+  <!-- Riders dropdown: one button collapses every available rider onto
+       the bar instead of listing them inline. Tapping a rider in the
+       dropdown moves it to an active chit (above), and tapping the
+       chit puts it back here. Hidden entirely when the actor has no
+       inactive riders left to offer. -->
   {#if inactiveRiders.length > 0}
-    <span class="dnd-rider-separator" aria-hidden="true"></span>
-    {#each inactiveRiders as rider (rider.name)}
-      {@const uses = encounter.effectiveActor?.rider_uses?.[rider.name]}
-      {@const riderDice = rider.effects.find((e) => e.type === "damage")?.dice}
+    <div style="position: relative;">
       <button
-        class="dnd-rider-chip dnd-rider-inactive"
-        onclick={() => toggleRider(rider)}
-        title="Tap to add {rider.name} to this action"
+        class="dnd-bar-btn"
+        class:active={showRiderPicker}
+        onclick={() => { const next = !showRiderPicker; closeAllDropdowns(); showRiderPicker = next; }}
+        title="Add a rider to this action"
+        aria-label="Add a rider"
       >
-        <span class="dnd-rider-q">?</span>
-        <span class="dnd-rider-name">{rider.name}</span>
-        {#if riderDice}
-          <span class="dnd-rider-dice">{riderDice}</span>
-        {/if}
-        {#if uses}
-          <span class="dnd-rider-uses">({uses.current}/{uses.max})</span>
-        {/if}
+        <span class="dnd-action-icon dnd-icon-rider">{@html ACTION_ICONS.puzzlePiece}</span>
       </button>
-    {/each}
+      {#if showRiderPicker}
+        <div class="dnd-dropdown dnd-rider-picker" use:constrainToViewport>
+          {#each inactiveRiders as rider (rider.name)}
+            {@const uses = encounter.effectiveActor?.rider_uses?.[rider.name]}
+            {@const riderDice = rider.effects.find((e) => e.type === "damage")?.dice}
+            <button
+              class="dnd-dropdown-row dnd-via-suggestion"
+              onmousedown={() => { toggleRider(rider); showRiderPicker = false; }}
+            >
+              <span class="dnd-via-name">{rider.name}</span>
+              <span class="dnd-via-detail">
+                {#if riderDice}{riderDice}{/if}
+                {#if riderDice && uses} &middot; {/if}
+                {#if uses}{uses.current}/{uses.max} uses{/if}
+              </span>
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
   {/if}
 
   <button class="dnd-bar-btn active" onclick={handleCommit}>Commit</button>
@@ -1870,6 +1943,8 @@
       const dmg = effects.find((e) => e.type === "damage") as DamageEffect | undefined;
       return dmg?.damageType;
     })()}
+    auraInfo={auraInfo}
+    actionNote={actionNote}
   />
 {/if}
 {/if}

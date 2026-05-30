@@ -8,6 +8,7 @@
   import { renderSpellDescription } from "../utils/spell-renderer";
   import { CONDITION_DESCRIPTIONS } from "../utils/condition-descriptions";
   import { summarizeLogEntry } from "../utils/log-summary";
+  import { ACTION_ICONS } from "../icons/action-icons";
   import DefaultBar from "./bar/DefaultBar.svelte";
   import ActionBar from "./bar/ActionBar.svelte";
   import DeathSaveBar from "./bar/DeathSaveBar.svelte";
@@ -98,14 +99,17 @@
           banners.push({ tag, combatantId: combatant.id, combatantName: combatant.name });
         }
 
-        // on_ally_turn: fires when any ally of the tag source takes their turn
+        // on_ally_turn: fires when any ally of the tag source takes their turn.
+        // Aura tags surface the source's name in the header and the dynamic
+        // per-turn target after the arrow; non-aura tags keep the legacy
+        // "{current} ({source})" framing.
         if (tag.trigger === "on_ally_turn" && tag.source) {
           const source = encounter.getCombatant(tag.source);
           if (source && areAllies(source, currentActor)) {
             banners.push({
               tag,
               combatantId: currentActor.id,
-              combatantName: `${currentActor.name} (${combatant.name})`,
+              combatantName: tag.auraTarget ? combatant.name : `${currentActor.name} (${combatant.name})`,
             });
           }
         }
@@ -117,7 +121,7 @@
             banners.push({
               tag,
               combatantId: currentActor.id,
-              combatantName: `${currentActor.name} (${combatant.name})`,
+              combatantName: tag.auraTarget ? combatant.name : `${currentActor.name} (${combatant.name})`,
             });
           }
         }
@@ -232,13 +236,16 @@
     resolveAmount = 0;
     showResolveTargets = false;
 
-    // If the tag has a pre-set resolveTarget, seed the selection with it.
+    // Seed the resolve selection: aura tags target whichever combatant's turn
+    // triggered the banner; non-aura tags use the frozen resolveTarget from
+    // cast time (e.g. Sneak Attack -> the originally-attacked enemy).
     const tag = encounter.combatants
       .flatMap((c) => c.tags)
       .find((t) => t.id === tagId);
     resolveTargets = {};
-    if (tag?.resolveTarget) {
-      resolveTargets[tag.resolveTarget] = { checked: true, outcome: "full" };
+    const seedTargetId = tag?.auraTarget ? encounter.currentTurn : tag?.resolveTarget;
+    if (seedTargetId) {
+      resolveTargets[seedTargetId] = { checked: true, outcome: "full" };
     }
   }
 
@@ -598,10 +605,15 @@
       {@const srdSpellName = getSpellNameFromTag(banner.tag)}
       {@const isDescExpanded = expandedSpellDescs.has(banner.tag.id)}
       {@const isConcentrationSave = banner.tag.name.startsWith("Concentration:")}
+      {@const dynamicTargetId = banner.tag.auraTarget ? banner.combatantId : banner.tag.resolveTarget}
+      {@const dynamicTargetName = dynamicTargetId ? (encounter.getCombatant(dynamicTargetId)?.name ?? dynamicTargetId) : null}
       <div class="dnd-obligation-banner" class:concentration={isConcentrationSave}>
         <div class="dnd-banner-title">
-          &#9888; {banner.combatantName}: {banner.tag.name}{#if banner.tag.uses} <span class="dnd-uses-counter" class:depleted={banner.tag.uses.current <= 0}>({banner.tag.uses.current}/{banner.tag.uses.max})</span>{/if}{#if banner.tag.resolveTarget} &rarr; {encounter.getCombatant(banner.tag.resolveTarget)?.name ?? banner.tag.resolveTarget}{/if}
+          &#9888; {banner.combatantName}: {banner.tag.name}{#if banner.tag.uses} <span class="dnd-uses-counter" class:depleted={banner.tag.uses.current <= 0}>({banner.tag.uses.current}/{banner.tag.uses.max})</span>{/if}{#if dynamicTargetName} &rarr; {dynamicTargetName}{/if}
         </div>
+        {#if banner.tag.range}
+          <div class="dnd-banner-detail dnd-banner-range">within {banner.tag.range}</div>
+        {/if}
         {#if banner.tag.onTrigger}
           <div class="dnd-banner-detail">{banner.tag.onTrigger}</div>
         {/if}
@@ -619,23 +631,23 @@
               class:active={resolvingTagId === banner.tag.id}
               disabled={!!banner.tag.uses && banner.tag.uses.current <= 0}
               onclick={() => startResolve(banner.tag.id)}
-            >Resolve</button>
+            ><span class="dnd-banner-btn-icon">{@html ACTION_ICONS.circleCheck}</span>Apply</button>
           {:else if banner.tag.uses}
             <button
               class="dnd-banner-btn pass"
               disabled={banner.tag.uses.current <= 0}
               onclick={() => spendUse(banner)}
-            >Use</button>
+            ><span class="dnd-banner-btn-icon">{@html ACTION_ICONS.circleCheck}</span>Use</button>
           {/if}
           {#if srdSpellName}
             <button
               class="dnd-banner-btn dnd-spell-name-btn"
               class:active={isDescExpanded}
               onclick={() => toggleSpellDesc(banner.tag.id)}
-            >{srdSpellName}</button>
+            ><span class="dnd-banner-btn-icon">{@html ACTION_ICONS.circleInfo}</span>{srdSpellName}</button>
           {/if}
           <button class="dnd-banner-btn dismiss" onclick={() => dismissTag(banner.combatantId, banner.tag.id)}>
-            Dismiss
+            <span class="dnd-banner-btn-icon">{@html ACTION_ICONS.trash}</span>Dismiss
           </button>
         </div>
 

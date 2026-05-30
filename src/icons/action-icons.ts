@@ -10,6 +10,11 @@ import personRunning from "./person-running-sharp-solid-full.svg";
 import pagePen from "./sharp-solid-page-pen-full.svg";
 import shieldHalved from "./shield-halved-sharp-solid-full.svg";
 import skull from "./skull-solid-full.svg";
+import puzzlePiece from "./puzzle-piece-simple-sharp-solid-full.svg";
+import plus from "./plus-sharp-solid-full.svg";
+import circleCheck from "./circle-check-solid-full.svg";
+import circleInfo from "./circle-info-sharp-solid-full.svg";
+import trash from "./trash-solid-full.svg";
 
 /** Inject explicit width/height attributes onto an SVG string. Used for
  *  fixed-pixel icons on bar buttons. Icons that should track font-size
@@ -40,6 +45,17 @@ export const ACTION_ICONS = {
   distances: sized(distances, 20),
   flies: sized(flies, 20),
   flees: sized(flees, 20),
+
+  // Bar-button glyphs that replace plain text/unicode. Sized 20px to
+  // match the rest of the bar icons.
+  puzzlePiece: sized(puzzlePiece, 20),
+  plus: sized(plus, 20),
+
+  // Banner action-button glyphs (Apply / spell info / Dismiss). Sized 16px
+  // so they sit beside the button label without overpowering it.
+  circleCheck: sized(circleCheck, 16),
+  circleInfo: sized(circleInfo, 16),
+  trash: sized(trash, 16),
 
   // Inline icons that size with surrounding text. CSS sets width/height
   // in em so they track font-size and line-height naturally.

@@ -76,6 +76,10 @@ export interface ActionEffect {
   resetOn?: "turn";
   /** For type: "counter" — id of the counter to tick. Always +1 per application. */
   counter?: string;
+  /** Range constraint surfaced on the resulting tag's banner so the DM can
+   *  judge whether each turn's actor is actually inside the aura. Optional;
+   *  falls back to the parent action's `range` for display when unset. */
+  range?: string;
 }
 
 export interface CombatAction {
@@ -150,8 +154,16 @@ export interface CombatTag {
   save?: { stat: string; onSave?: string };
   /** Deferred heal flag. */
   isHeal?: boolean;
-  /** Who the deferred effect resolves against (target combatant ID). */
+  /** Who the deferred effect resolves against (target combatant ID). For
+   *  aura tags (auraTarget set), this stays empty and the banner derives
+   *  the target from whichever combatant's turn triggered the banner. */
   resolveTarget?: string;
+  /** For aura tags: which side the per-turn trigger applies to. When set,
+   *  the banner shows the current-turn actor as the dynamic target rather
+   *  than a frozen cast-time selection. */
+  auraTarget?: "ally" | "enemy" | "all";
+  /** Range constraint surfaced as a chip on the banner, e.g. "30 ft." */
+  range?: string;
   /** Groups tags from the same action commit for cascade cleanup. */
   castId?: string;
   /** Limited uses. Resolve/use decrements current. Banner disables at 0. */

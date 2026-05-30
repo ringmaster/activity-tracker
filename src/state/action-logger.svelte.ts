@@ -66,10 +66,32 @@ export function commitAttack(state: EncounterState, params: AttackParams): void 
   state.logInsert(entry);
 
   // Apply damage to targets
+  let anyDamage = false;
   for (const t of tgt) {
     if (!t.dmg || t.dmg.length === 0) continue;
+    anyDamage = true;
     const dmgTotal = totalDamage(t.dmg);
     applyDamage(state, t.who, dmgTotal);
+  }
+
+  // Sweep when_self_attacks tags off the actor. RAW: hiding ends when
+  // you attack. Damage-bearing commits qualify; zero-damage actions
+  // (Hide, Dash, Disengage, Help) leave the tag alone so a Cunning Hide
+  // -> Dash sequence keeps the rogue hidden, while Cunning Hide -> attack
+  // properly reveals them.
+  if (anyDamage) {
+    const actor = state.getCombatant(params.by);
+    if (actor) {
+      const stealthTags = (actor.tags ?? []).filter((t) => t.autoRemove === "when_self_attacks");
+      if (stealthTags.length > 0) {
+        actor.tags = actor.tags.filter((t) => t.autoRemove !== "when_self_attacks");
+        for (const t of stealthTags) {
+          state.logInsert({
+            effect_ends: { what: t.name, on: params.by, reason: "self_attacked" },
+          });
+        }
+      }
+    }
   }
 
   // Handle spell slot and concentration

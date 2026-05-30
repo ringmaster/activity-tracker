@@ -9,12 +9,19 @@
     onClose,
     onAddTarget,
     damageType,
+    auraInfo = null,
+    actionNote = null,
   }: {
     encounter: EncounterState;
     selected: Record<string, { checked: boolean; outcome: "full" | "half" | "zero" }>;
     onClose?: () => void;
     onAddTarget?: () => void;
     damageType?: string;
+    /** When set, the dropdown prefaces the list with an aura header. Targets
+     *  remain selectable below for the rare case the DM wants to pin specific
+     *  recipients, but the header explains why selection is optional. */
+    auraInfo?: { on: "ally" | "enemy" | "all"; range?: string } | null;
+    actionNote?: string | null;
   } = $props();
 
   // Initialize selection state for all combatants if not already set
@@ -239,6 +246,18 @@
 {/snippet}
 
 <div class="dnd-dropdown">
+  {#if auraInfo}
+    {@const sideLabel = auraInfo.on === "ally" ? "allies" : auraInfo.on === "enemy" ? "enemies" : "everyone"}
+    <div class="dnd-aura-header">
+      <div class="dnd-aura-header-title">Aura: affects {sideLabel}{#if auraInfo.range} within {auraInfo.range}{/if}</div>
+      <div class="dnd-aura-header-detail">
+        Resolves per turn while the aura is up; you don't need to pick targets here.
+      </div>
+      {#if actionNote}
+        <div class="dnd-aura-header-note">{actionNote}</div>
+      {/if}
+    </div>
+  {/if}
   {#each groups as group (group.id)}
     <button
       class="dnd-dropdown-section-header dnd-zone-header-btn"
