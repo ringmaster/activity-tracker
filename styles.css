@@ -1865,6 +1865,28 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   line-height: 1;
 }
 
+/* Auto-counters pill: reuses the auto-tags pill chrome, but shows the clock
+ * icon and the count side by side (a number layered on a clock face reads as
+ * a time, not a tally). */
+.dnd-auto-counters-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dnd-auto-counters-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  fill: currentColor;
+}
+
+.dnd-auto-counters-count {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .dnd-implicit-move-pill {
   display: inline-flex;
   align-items: center;

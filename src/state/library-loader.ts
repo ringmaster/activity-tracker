@@ -1,6 +1,6 @@
 import yaml from "js-yaml";
 import type { App, TFile } from "obsidian";
-import type { CombatAction } from "../types/encounter";
+import type { CombatAction, AuthoredDamage, ActionEffect } from "../types/encounter";
 
 export interface LibraryData {
   actions?: CombatAction[];
@@ -242,6 +242,58 @@ export function invalidateLibraryCache(): void {
 export function findLibraryAction(name: string): CombatAction | undefined {
   const lower = name.toLowerCase();
   return cachedLibrary.find((a) => a.name.toLowerCase() === lower);
+}
+
+/** True when an array element is the `inherit` splice token. */
+function isInheritToken(item: unknown): boolean {
+  return typeof item === "string" && item.trim().toLowerCase() === "inherit";
+}
+
+/** Expand any `inherit` token in a child array to the parent's array at that
+ *  position. With no token the child array replaces the parent's wholesale;
+ *  `[inherit, x]` appends, `[x, inherit]` prepends. */
+function expandInherit<T>(
+  childArr: readonly (T | string)[] | undefined,
+  parentArr: readonly T[] | undefined,
+): T[] | undefined {
+  if (!childArr) return undefined;
+  if (!childArr.some(isInheritToken)) return childArr as T[];
+  const base = parentArr ?? [];
+  return childArr.flatMap((item) => (isInheritToken(item) ? [...base] : [item as T]));
+}
+
+/** Merge a child action over its resolved parent: child scalar fields win;
+ *  dmg/effects replace unless they carry an `inherit` token. The child keeps
+ *  its own name (falling back to the parent's via the spread) and the `parent`
+ *  pointer is consumed. */
+function mergeActionOverParent(parent: CombatAction, child: CombatAction): CombatAction {
+  const merged: CombatAction = { ...parent, ...child };
+  delete (merged as { parent?: string }).parent;
+  const dmg = expandInherit<AuthoredDamage>(child.dmg, parent.dmg);
+  if (dmg) merged.dmg = dmg;
+  const effects = expandInherit<ActionEffect>(child.effects, parent.effects);
+  if (effects) merged.effects = effects;
+  return merged;
+}
+
+/** Resolve a combatant action reference to a concrete CombatAction:
+ *   - string -> a library reference, looked up by name (undefined if unknown);
+ *   - object with `parent` -> the named library entry with this object merged
+ *     on top (see mergeActionOverParent); if the parent name is unknown, the
+ *     child is returned as authored, minus the dangling pointer;
+ *   - plain object -> returned unchanged.
+ *  Call this anywhere a combatant action is consumed so `parent` and the
+ *  `inherit` token resolve consistently. */
+export function resolveActionRef(ref: string | CombatAction): CombatAction | undefined {
+  if (typeof ref === "string") return findLibraryAction(ref);
+  if (!ref.parent) return ref;
+  const parent = findLibraryAction(ref.parent);
+  if (!parent) {
+    const fallback: CombatAction = { ...ref };
+    delete (fallback as { parent?: string }).parent;
+    return fallback;
+  }
+  return mergeActionOverParent(parent, ref);
 }
 
 /** Search the cached library by partial name match. */

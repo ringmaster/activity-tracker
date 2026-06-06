@@ -1,7 +1,7 @@
 import type { App } from "obsidian";
 import type { EncounterState } from "./encounter-state.svelte";
 import type { Combatant, CombatAction } from "../types/encounter";
-import { findLibraryAction } from "./library-loader";
+import { resolveActionRef } from "./library-loader";
 import { getCreature, getStatblockActionToHit } from "./statblocks-api";
 
 /** A single missing value surfaced by the pre-flight readiness check. The check
@@ -18,8 +18,7 @@ export interface ReadinessIssue {
  *  object) to a CombatAction for inspection. An unmatched string becomes a
  *  minimal attack stub so it's still treated as an attack that needs a bonus. */
 function resolveAction(a: string | CombatAction): CombatAction {
-  if (typeof a === "string") return findLibraryAction(a) ?? { name: a, type: "attack" };
-  return a;
+  return resolveActionRef(a) ?? { name: typeof a === "string" ? a : a.name, type: "attack" };
 }
 
 /** Whether an action resolves via an attack roll (so it wants a to-hit) rather

@@ -87,6 +87,11 @@ export interface CombatAction {
   type: string;
   /** Custom verb for the log, e.g., "grapples", "shoves". */
   verb?: string;
+  /** Inherit from a library action by name: that entry is resolved first, then
+   *  this object's own fields override it (scalars win outright). Array fields
+   *  (dmg, effects) replace the parent's unless they contain an "inherit"
+   *  element, which splices the parent's array in at that position. */
+  parent?: string;
   /** Attack roll bonus, e.g., 5 for "+5 to hit". */
   toHit?: number;
   dmg?: AuthoredDamage[];
@@ -320,6 +325,10 @@ export interface Spell {
   name: string;
   type: string;
   verb?: string;
+  /** Inherit a library spell by name; this object's fields override it. Same
+   *  merge rules as CombatAction.parent (dmg/effects replace unless they carry
+   *  an "inherit" element). Handy for upcasting. */
+  parent?: string;
   range?: string;
   concentration?: boolean;
   duration_rounds?: number;

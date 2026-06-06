@@ -9,7 +9,7 @@ function isOutOfCombat(c: Combatant): boolean {
   return c.type === "object" || c.conditions.includes("dead") || c.conditions.includes("fled");
 }
 import { getCreature } from "./statblocks-api";
-import { findLibraryAction } from "./library-loader";
+import { resolveActionRef } from "./library-loader";
 import { rewindAll } from "./log-rewind.svelte";
 import type { App } from "obsidian";
 
@@ -171,13 +171,9 @@ function initActionUses(
   if (!actions || actions.length === 0) return undefined;
   const out: Record<string, { current: number; max: number }> = {};
   for (const a of actions) {
-    if (typeof a === "string") {
-      const lib = findLibraryAction(a);
-      if (lib?.uses?.count != null) {
-        out[lib.name] = { current: lib.uses.count, max: lib.uses.count };
-      }
-    } else if (a.uses?.count != null) {
-      out[a.name] = { current: a.uses.count, max: a.uses.count };
+    const resolved = resolveActionRef(a);
+    if (resolved?.uses?.count != null) {
+      out[resolved.name] = { current: resolved.uses.count, max: resolved.uses.count };
     }
   }
   return Object.keys(out).length > 0 ? out : undefined;
@@ -309,11 +305,14 @@ function applyStartEffects(state: EncounterState): void {
     const actions = combatant.actions ?? [];
     for (const action of actions) {
       if (typeof action === "string") continue;
-      const effects = action.effects ?? [];
+      // Resolve `parent` so an inline override inherits the library entry's
+      // active_at_start effects too.
+      const resolved = resolveActionRef(action) ?? action;
+      const effects = resolved.effects ?? [];
       for (const effect of effects) {
         if (!effect.active_at_start) continue;
         if (effect.type !== "tag" && effect.type !== "heal" && effect.type !== "damage") continue;
-        const tagName = effect.name ?? action.name;
+        const tagName = effect.name ?? resolved.name;
         // Don't duplicate if the tag already exists
         if (combatant.tags.some((t) => t.name === tagName)) continue;
         combatant.tags.push({
@@ -430,7 +429,7 @@ export function nextTurn(state: EncounterState): void {
   // String action refs are resolved against the library to find the cap.
   if (actor.actions && actor.action_uses) {
     for (const a of actor.actions) {
-      const resolved = typeof a === "string" ? findLibraryAction(a) : a;
+      const resolved = resolveActionRef(a);
       if (!resolved) continue;
       if (resolved.uses?.per === "turn" && actor.action_uses[resolved.name]) {
         actor.action_uses[resolved.name].current = actor.action_uses[resolved.name].max;

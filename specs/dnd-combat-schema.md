@@ -143,6 +143,7 @@ actions:
 | `name`          | string                              | Required. |
 | `type`          | string                              | Common values: `attack`, `ability`, `spell`, `multiattack`, `reminder`. Free-form. |
 | `verb`          | string                              | Optional override of the action's log verb (`"grapples"`, `"shoves"`). |
+| `parent`        | string                              | Inherit a library entry by name, then override with this object's own fields. See "Inheriting a library entry" below. |
 | `toHit`         | number                              | Per-action attack bonus; overrides the combatant default. |
 | `dmg`           | `AuthoredDamage[]`                  | See §1.10. Authored as `{dice: "1d6+3", type: slashing}`. |
 | `save`          | `SaveInfo`                          | `{stat, dc, on_pass?}`. `stat` may be a list to indicate "target's choice". |
@@ -163,6 +164,48 @@ authored for reference. They have no semantic effect on the tracker:
 `_source` is a runtime-only field set by the library loader to indicate which
 library file an entry was loaded from; do not author it.
 
+#### Inheriting a library entry (`parent`)
+
+An `actions:` or `spells:` entry may set `parent: <library name>` to resolve
+that library entry first and then override it with the object's own fields.
+This avoids re-stating a standard weapon or spell just to change one property.
+
+- **Scalars** (`toHit`, `verb`, `concentration`, `slot`, ...) replace outright.
+- **Array fields** (`dmg`, `effects`) replace the parent's **unless** the child
+  array contains the string `inherit`, which splices the parent's array in at
+  that position: `[inherit, X]` appends, `[X, inherit]` prepends.
+- The child keeps its own `name` (falling back to the parent's), and `parent`
+  itself is consumed (it never appears on the resolved action).
+- If the `parent` name doesn't resolve, the child is used as authored, minus
+  the dangling pointer.
+
+```yaml
+actions:
+  - name: Roice's Glaive        # Glaive's stats, attack bonus bumped to +9
+    parent: Glaive
+    toHit: 9
+  - name: Sneak Attack (L9)     # damage fully replaced (no inherit token)
+    parent: Sneak Attack
+    dmg: [{dice: "5d6", type: piercing}]
+  - name: Shortsword of Ice     # parent's slashing PLUS an extra cold component
+    parent: Shortsword
+    dmg: [inherit, {dice: "1d6", type: cold}]
+```
+
+`parent` works the same on `spells:`, which is handy for 2024-style upcasting:
+
+```yaml
+spells:
+  - name: "Fireball (5th)"
+    parent: Fireball
+    slot: 5
+    dmg: [inherit, {dice: "2d6", type: fire}]   # base 8d6 + 2d6 for two levels
+```
+
+Resolution is lazy (at action-selection time), so a `parent` pointing at a
+library entry that finishes loading after the note first renders still resolves
+once the library is available.
+
 #### 1.1.3 Spells array
 
 `spells:` is the same dual-shape (`string` or full `Spell` object) as
@@ -170,7 +213,8 @@ library file an entry was loaded from; do not author it.
 no `type:` are normalized to `type: spell` at load. If the library has no
 match, the SRD database (`data/5e-SRD-Spells.json`, 319 spells) is consulted.
 
-`Spell` extends `CombatAction` with an optional `obligation:` block (§1.3).
+`Spell` accepts the same authoring fields as a `CombatAction` (including
+`parent`/`inherit`, see above) plus an optional `obligation:` block (§1.3).
 
 ```yaml
 spells:

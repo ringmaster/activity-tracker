@@ -15,6 +15,7 @@ import plus from "./plus-sharp-solid-full.svg";
 import circleCheck from "./circle-check-solid-full.svg";
 import circleInfo from "./circle-info-sharp-solid-full.svg";
 import trash from "./trash-solid-full.svg";
+import clock from "./clock-solid-full.svg";
 
 /** Inject explicit width/height attributes onto an SVG string. Used for
  *  fixed-pixel icons on bar buttons. Icons that should track font-size
@@ -62,4 +63,5 @@ export const ACTION_ICONS = {
   shield: unsized(shieldHalved),
   skull: unsized(skull),
   heart: unsized(heartCirclePlus),
+  clock: unsized(clock),
 };

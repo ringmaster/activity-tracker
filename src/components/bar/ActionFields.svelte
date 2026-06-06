@@ -8,7 +8,7 @@
   import { commitAttack, commitHeal, dropConcentration, markDown, applyDamageDirect } from "../../state/action-logger.svelte";
   import { tickCounter } from "../../state/counter-engine.svelte";
   import { generateSpellTag, generateConcentrationTag } from "../../data/spell-tag-generator";
-  import { findLibraryAction, searchLibrary } from "../../state/library-loader";
+  import { findLibraryAction, searchLibrary, resolveActionRef } from "../../state/library-loader";
   import { getStatblockActionToHit } from "../../state/statblocks-api";
   import yaml from "js-yaml";
   import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
@@ -108,6 +108,7 @@
   let showEffectPicker = $state(false);
   let showRiderPicker = $state(false);
   let showAutoTags = $state(false);
+  let showAutoCounters = $state(false);
   let addingTarget = $state(false);
 
   // Implicit move state -- when the chosen action requires melee range and the
@@ -118,6 +119,10 @@
   let showImplicitMoveDetails = $state(false);
   /** Track which tag indices are auto-populated from the library definition. */
   let autoTagIndices = $state<Set<number>>(new Set(resumeSnapshot?.autoTagIndices ?? []));
+  /** Indices of counter effects auto-added from the action definition, so the
+   *  clock pill can collapse them the way auto tags collapse. Rebuilt on each
+   *  action selection; cosmetic-only, so not threaded through resume. */
+  let autoCounterIndices = $state<Set<number>>(new Set());
 
   function closeAllDropdowns() {
     showTargets = false;
@@ -176,6 +181,9 @@
 
   let autoTagCount = $derived(
     effects.filter((_, idx) => autoTagIndices.has(idx) && effects[idx]?.type === "tag").length,
+  );
+  let autoCounterCount = $derived(
+    effects.filter((_, idx) => autoCounterIndices.has(idx) && effects[idx]?.type === "counter").length,
   );
 
   // Rider toggles: which of the actor's authored riders are active for this
@@ -381,9 +389,11 @@
           if (resolved) results.push(resolved);
           else results.push({ name: entry });
         } else if (entry.type !== "multiattack" && entry.type !== "reminder") {
-          const cap = actor.action_uses?.[entry.name];
+          // Resolve `parent` so an inline override inherits the library entry.
+          const resolved = resolveActionRef(entry) ?? entry;
+          const cap = actor.action_uses?.[resolved.name];
           if (cap && cap.current <= 0) continue;
-          results.push(actionToSuggestion(entry));
+          results.push(actionToSuggestion(resolved));
         }
       }
     }
@@ -413,22 +423,32 @@
             results.push({ name: entry, isSpell: true });
           }
         } else {
-          // Inline custom spell. The Spell type nominally declares dmg as
-          // DamageComponent[] ({n, type}), but YAML-authored spells write
-          // {dice, type} (AuthoredDamage shape). Normalize to authoredDmg so
-          // the dropdown's `${d.dice} ${d.type}` rendering and selectAction's
-          // damage setup both see consistent fields.
+          // Inline custom spell. If it inherits a library spell via `parent`
+          // (e.g. an upcast variant), resolve and merge first. The Spell shape
+          // is treated as a CombatAction for the merge; the consumed fields
+          // line up and authored {dice} damage matches the library's.
+          const spell = (entry.parent
+            ? resolveActionRef(entry as unknown as CombatAction)
+            : null) ?? entry;
+          // The Spell type nominally declares dmg as DamageComponent[] ({n,
+          // type}), but YAML-authored spells write {dice, type} (AuthoredDamage
+          // shape). Normalize to authoredDmg so the dropdown's
+          // `${d.dice} ${d.type}` rendering and selectAction's damage setup both
+          // see consistent fields.
           results.push({
-            name: entry.name,
-            authoredDmg: entry.dmg?.map((d) => ({
+            name: spell.name,
+            authoredDmg: spell.dmg?.map((d) => ({
               dice: (d as any).dice ?? "",
               type: d.type,
             })),
             isSpell: true,
-            spellKey: (entry.name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-            conc: entry.concentration,
-            verb: entry.verb,
-            actionEffects: entry.effects,
+            spellKey: (spell.name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+            conc: spell.concentration,
+            verb: spell.verb,
+            actionEffects: spell.effects,
+            // Set libAction for inherited spells so the accuracy/effect lines
+            // and selectAction pick up the merged save/desc/damage metadata.
+            libAction: entry.parent ? (spell as CombatAction) : undefined,
           });
         }
       }
@@ -669,6 +689,7 @@
     // Drop any counter chips left over from a previously-selected action, so
     // re-selecting doesn't accumulate stale ticks.
     effects = effects.filter((e) => e.type !== "counter");
+    autoCounterIndices = new Set();
 
     // --- Auto-populate structured effects from action definition ---
     if (action.actionEffects && action.actionEffects.length > 0) {
@@ -678,6 +699,7 @@
           // double-add manually. Skip duplicates.
           if (!effects.some((e) => e.type === "counter" && (e as CounterEffect).counterId === ae.counter)) {
             effects = [...effects, { type: "counter", counterId: ae.counter }];
+            autoCounterIndices = new Set([...autoCounterIndices, effects.length - 1]);
           }
           continue;
         }
@@ -1612,6 +1634,8 @@
         <span class="dnd-effect-label">Conc</span>
         <button class="dnd-effect-remove" onclick={() => { removeEffect(idx); isConc = false; }}>&times;</button>
       </div>
+    {:else if effect.type === "counter" && autoCounterIndices.has(idx) && !showAutoCounters}
+      <!-- Auto counters hidden; shown via the clock pill -->
     {:else if effect.type === "counter"}
       <div class="dnd-effect-widget dnd-counter-widget">
         <span class="dnd-effect-label">+1</span>
@@ -1667,6 +1691,22 @@
         <span class="dnd-auto-tags-count">{autoTagCount}</span>
       </span>
       <span class="dnd-auto-tags-caret">{showAutoTags ? "▾" : "▸"}</span>
+    </button>
+  {/if}
+
+  <!-- Auto-counters (clock) pill: collapses the counter pills auto-added from
+       the action definition, mirroring the auto-tags pill. -->
+  {#if autoCounterCount > 0}
+    <button
+      class="dnd-auto-tags-pill dnd-auto-counters-pill"
+      class:active={showAutoCounters}
+      onclick={() => { showAutoCounters = !showAutoCounters; }}
+      title={showAutoCounters ? "Collapse auto-applied counters" : "Show auto-applied counters"}
+      aria-label="{autoCounterCount} auto-applied counter{autoCounterCount > 1 ? 's' : ''}"
+    >
+      <span class="dnd-auto-counters-icon">{@html ACTION_ICONS.clock}</span>
+      <span class="dnd-auto-counters-count">{autoCounterCount}</span>
+      <span class="dnd-auto-tags-caret">{showAutoCounters ? "▾" : "▸"}</span>
     </button>
   {/if}
 
