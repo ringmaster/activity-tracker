@@ -5,9 +5,10 @@
   import { summarizeLogEntry } from "../../utils/log-summary";
   import CombatantRow from "./CombatantRow.svelte";
 
-  let { encounter, onRunEncounter, readOnly = false }: {
+  let { encounter, onRunEncounter, onPracticeEncounter, readOnly = false }: {
     encounter: EncounterState;
     onRunEncounter?: () => void;
+    onPracticeEncounter?: () => void;
     readOnly?: boolean;
   } = $props();
 
@@ -47,11 +48,17 @@
     }
     encounter.active = true;
     encounter.flushNow();
+    encounter.onActivate?.();
   }
 
   function handleRun() {
     if (blockedBy) return;
     onRunEncounter?.();
+  }
+
+  function handlePractice() {
+    if (blockedBy) return;
+    onPracticeEncounter?.();
   }
 
   function handleReset() {
@@ -98,7 +105,7 @@
             disabled={!!blockedBy}
             title={blockedBy ? `Blocked by active encounter: ${blockedBy}` : ""}
           >
-            &#9654; Continue encounter
+            &#9654; {encounter.practiceMode ? "Continue practice" : "Continue encounter"}
           </button>
           <button class="dnd-encounter-btn reset" onclick={handleReset}>
             {confirmReset ? "Confirm reset?" : "Reset encounter"}
@@ -111,6 +118,18 @@
             title={blockedBy ? `Blocked by active encounter: ${blockedBy}` : ""}
           >
             &#9654; Run encounter
+          </button>
+        {/if}
+        {#if onPracticeEncounter && !encounter.practiceMode}
+          <button
+            class="dnd-encounter-btn practice"
+            onclick={handlePractice}
+            disabled={!!blockedBy}
+            title={blockedBy
+              ? `Blocked by active encounter: ${blockedBy}`
+              : "Run through the encounter without saving any changes"}
+          >
+            &#127922; Practice
           </button>
         {/if}
         {#if blockedBy}

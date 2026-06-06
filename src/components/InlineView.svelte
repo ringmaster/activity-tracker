@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { App } from "obsidian";
   import type { EncounterState } from "../state/encounter-state.svelte";
-  import { prepareRoster, startEncounter, type PCToAdd } from "../state/combat-engine.svelte";
+  import { prepareRoster, startEncounter, rewindToAuthored, type PCToAdd } from "../state/combat-engine.svelte";
   import { loadPartyData } from "../state/party-loader";
   import type { Party } from "../types/party";
   import InactiveView from "./inline/InactiveView.svelte";
@@ -29,6 +29,18 @@
     showRoster = true;
   }
 
+  async function handlePracticeEncounter() {
+    encounter.enterPractice();
+    // Start practice from a clean authored roster even if the encounter has
+    // persisted progress. rewindToAuthored mutates memory only (no flush, and
+    // it doesn't leave practice), so the file keeps its progress; enterPractice
+    // snapshotted it and exitPractice restores it when practice ends.
+    if (encounter.round > 0 || encounter.log.length > 0) {
+      rewindToAuthored(encounter);
+    }
+    await handleRunEncounter();
+  }
+
   function handleStart(
     inits: Map<string, number>,
     pcsToAdd: PCToAdd[],
@@ -41,6 +53,11 @@
 
   function handleCancel() {
     showRoster = false;
+    // Backing out of the roster before a practice run actually started should
+    // leave practice entirely, restoring the pre-practice state.
+    if (encounter.practiceMode && !encounter.active) {
+      encounter.exitPractice();
+    }
   }
 </script>
 
@@ -56,5 +73,10 @@
 {:else if encounter.active}
   <ActiveView {encounter} {readOnly} />
 {:else}
-  <InactiveView {encounter} onRunEncounter={readOnly ? undefined : handleRunEncounter} {readOnly} />
+  <InactiveView
+    {encounter}
+    onRunEncounter={readOnly ? undefined : handleRunEncounter}
+    onPracticeEncounter={readOnly ? undefined : handlePracticeEncounter}
+    {readOnly}
+  />
 {/if}

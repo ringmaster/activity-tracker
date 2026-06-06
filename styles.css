@@ -1009,6 +1009,53 @@ body.dnd-ios-phone .dnd-combat-bar-container {
   font-weight: 400;
 }
 
+.dnd-encounter-btn.practice {
+  background: var(--background-secondary);
+  color: var(--color-orange, #e0852b);
+  border-color: var(--color-orange, #e0852b);
+}
+
+/* ---------- Practice mode (no-save dry run) ---------- */
+.dnd-practice-badge {
+  max-width: 768px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--color-orange, #e0852b);
+  background: color-mix(in srgb, var(--color-orange, #e0852b) 14%, var(--background-primary));
+  border-bottom: 2px solid var(--color-orange, #e0852b);
+}
+
+/* ---------- Pre-flight readiness report (roster confirm) ---------- */
+.dnd-preflight {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--color-orange, #e0852b);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-orange, #e0852b) 12%, var(--background-primary));
+}
+
+.dnd-preflight-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-orange, #e0852b);
+  margin-bottom: 4px;
+}
+
+.dnd-preflight-item {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.dnd-preflight-name {
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
 .dnd-end-btn {
   flex-shrink: 0;
   align-self: flex-start;
@@ -1446,8 +1493,9 @@ body.dnd-ios-phone .dnd-combat-bar-container {
 .dnd-via-tohit {
   font-size: 12px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-accent, #7b9cff);
   padding: 0 2px;
+  white-space: nowrap;
 }
 
 .dnd-via-badge {

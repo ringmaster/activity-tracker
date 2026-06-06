@@ -247,7 +247,7 @@ function learnAction(
       if (!actor.actions) actor.actions = [];
       actor.actions.push(libMatch.name);
     }
-    if (actor.type === "pc") {
+    if (actor.type === "pc" && !state.practiceMode) {
       updatePartyMember(state.app, state.partyNotePath, actor.id,
         isSpellAction ? undefined : [libMatch.name],
         isSpellAction ? [libMatch.name] : undefined,
@@ -271,17 +271,24 @@ function learnAction(
       libAction.effects = actionEffects;
     }
 
-    addToLibrary(state.app, state.libraryPaths, libAction);
+    // In-memory mutation (actor.spells/actions) still happens during practice so
+    // the action is usable for the rest of the run; only the disk writes are
+    // suppressed.
+    if (!state.practiceMode) addToLibrary(state.app, state.libraryPaths, libAction);
 
     // Add string reference to actor and party file
     if (isSpellAction) {
       if (!actor.spells) actor.spells = [];
       actor.spells.push(via);
-      updatePartyMember(state.app, state.partyNotePath, actor.id, undefined, [via]);
+      if (!state.practiceMode) {
+        updatePartyMember(state.app, state.partyNotePath, actor.id, undefined, [via]);
+      }
     } else {
       if (!actor.actions) actor.actions = [];
       actor.actions.push(via);
-      updatePartyMember(state.app, state.partyNotePath, actor.id, [via]);
+      if (!state.practiceMode) {
+        updatePartyMember(state.app, state.partyNotePath, actor.id, [via]);
+      }
     }
     return;
   }

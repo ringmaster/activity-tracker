@@ -78,7 +78,7 @@
         class="dnd-encounter-btn stop"
         onclick={() => endEncounter(encounter)}
       >
-        &#9208; Stop encounter
+        &#9208; {encounter.practiceMode ? "Stop practice" : "Stop encounter"}
       </button>
       <button
         class="dnd-encounter-btn reset"

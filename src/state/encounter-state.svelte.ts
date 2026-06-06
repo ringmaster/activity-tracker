@@ -54,6 +54,14 @@ export class EncounterState {
    *  clears it. Not persisted. */
   resumingReadiedFrom = $state<ReadiedActionSnapshot | null>(null);
 
+  /** True while running a no-save practice session. Transient; never persisted.
+   *  While set, flush()/flushNow() and the party/library writers are no-ops. */
+  practiceMode = $state<boolean>(false);
+  /** Persisted state captured when practice began, restored verbatim on exit.
+   *  The on-disk YAML is never touched during practice, so this snapshot is the
+   *  authoritative way back to the pre-practice state. */
+  private practiceSnapshot: EncounterData | null = null;
+
   // Derived values
   sortedCombatants = $derived(
     [...(this.combatants ?? [])].sort((a, b) => (b.init ?? 0) - (a.init ?? 0)),
@@ -101,6 +109,10 @@ export class EncounterState {
 
   /** Called when the encounter deactivates so the plugin can hide the bar. */
   onDeactivate: (() => void) | null = null;
+  /** Called when the encounter becomes active (start/continue). Lets the plugin
+   *  show the sticky bar without waiting on a file-write-triggered re-render,
+   *  which never happens in practice mode (no write). */
+  onActivate: (() => void) | null = null;
 
   /** Plugin sets this so the inline view can disable Run/Continue when another
    *  encounter in the same file is already active. Returns the name of the
@@ -231,10 +243,31 @@ export class EncounterState {
     }));
   }
 
+  /** Begin a practice run: snapshot the current persisted state and stop all
+   *  writes. Combat then plays entirely in memory. */
+  enterPractice(): void {
+    // toData() already deep-clones via JSON round-trip, so this snapshot is
+    // detached from the live reactive state.
+    this.practiceSnapshot = this.toData();
+    this.practiceMode = true;
+  }
+
+  /** End a practice run: restore the entry snapshot and resume writes. The
+   *  on-disk YAML was never touched, so this returns memory to exactly what was
+   *  persisted before practice began. */
+  exitPractice(): void {
+    if (this.practiceSnapshot) this.loadFromData(this.practiceSnapshot);
+    this.practiceSnapshot = null;
+    this.practiceMode = false;
+    this.onDeactivate?.();
+  }
+
   /** Flush current state to the YAML code block (debounced). The block is
    *  located by re-scanning the file and matching the encounter name, so
-   *  sibling-block writes that shift line numbers don't corrupt the target. */
+   *  sibling-block writes that shift line numbers don't corrupt the target.
+   *  No-op during a practice run. */
   flush(): void {
+    if (this.practiceMode) return;
     this.debouncedFlush.schedule(
       this.file,
       this.language,
@@ -243,8 +276,10 @@ export class EncounterState {
     );
   }
 
-  /** Flush immediately (for critical operations like encounter start/end). */
+  /** Flush immediately (for critical operations like encounter start/end).
+   *  No-op during a practice run. */
   async flushNow(): Promise<void> {
+    if (this.practiceMode) return;
     this.debouncedFlush.cancel();
     await flushToFile(
       this.app,

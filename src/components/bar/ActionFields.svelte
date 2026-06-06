@@ -9,6 +9,7 @@
   import { tickCounter } from "../../state/counter-engine.svelte";
   import { generateSpellTag, generateConcentrationTag } from "../../data/spell-tag-generator";
   import { findLibraryAction, searchLibrary } from "../../state/library-loader";
+  import { getStatblockActionToHit } from "../../state/statblocks-api";
   import yaml from "js-yaml";
   import TargetsDropdown from "../dropdowns/TargetsDropdown.svelte";
   import DamageTypeIcon from "../shared/DamageTypeIcon.svelte";
@@ -305,6 +306,63 @@
     };
   }
 
+  /** Resolve an action's to-hit, including a per-attack bonus borrowed from the
+   *  actor's statblock when the action itself (and the library entry) carry
+   *  none. Falls back to the actor's blanket to-hit / spell attack. */
+  function resolveSuggestionToHit(action: ActionSuggestion): number | null {
+    const actor = encounter.effectiveActor;
+    const own = action.toHit ?? action.libAction?.toHit;
+    if (own != null) return own;
+    const fromStatblock = actor?.statblock
+      ? getStatblockActionToHit(encounter.app, actor.statblock, action.name)
+      : null;
+    if (fromStatblock != null) return fromStatblock;
+    const blanket = action.isSpell ? (actor?.spellAttack ?? actor?.toHit) : actor?.toHit;
+    return blanket ?? null;
+  }
+
+  /** Accuracy line for a selected/listed action: a save ("DC 15 DEX save", or
+   *  "DEX save" when no DC is authored) for save-based actions, otherwise the
+   *  attack bonus ("+5 to hit"). Null when neither applies. */
+  function formatAccuracy(action: ActionSuggestion): string | null {
+    const lib = action.libAction;
+    const save = lib?.save;
+    const saveStat = save?.stat ?? lib?.saveStat;
+    if (saveStat) {
+      const stat = (Array.isArray(saveStat) ? saveStat.join("/") : saveStat).toUpperCase();
+      return save?.dc != null ? `DC ${save.dc} ${stat} save` : `${stat} save`;
+    }
+    const toHit = resolveSuggestionToHit(action);
+    if (toHit == null) return null;
+    return toHit >= 0 ? `+${toHit} to hit` : `${toHit} to hit`;
+  }
+
+  /** Effect line: what the action does once it lands. Damage, on-save outcome,
+   *  applied conditions, healing, or a plain note. Null when there's nothing to
+   *  say (e.g. damage is deferred to a banner). */
+  function formatEffect(action: ActionSuggestion): string | null {
+    const parts: string[] = [];
+    const lib = action.libAction;
+    if (action.authoredDmg?.length) {
+      const dmg = action.authoredDmg
+        .filter((d) => d.type)
+        .map((d) => `${d.dice ?? ""} ${d.type}`.trim())
+        .join(" + ");
+      if (dmg) parts.push(dmg);
+    } else if (lib?.damageType) {
+      const deferred = lib.effects?.some((e) => e.type === "tag" && (e.dice || e.damageType));
+      if (!deferred) parts.push(`${lib.dice ?? ""} ${lib.damageType}`.trim());
+    }
+    const onSave = lib?.save?.on_pass ?? lib?.saveOnSuccess;
+    if (onSave && onSave !== "none") parts.push(`${onSave} on save`);
+    for (const effect of action.actionEffects ?? []) {
+      if (effect.type === "condition" && effect.name) parts.push(effect.name);
+      else if (effect.type === "heal") parts.push(`${effect.dice ?? ""} healing`.trim());
+    }
+    if (parts.length === 0 && action.note) parts.push(action.note);
+    return parts.length > 0 ? parts.join(", ") : null;
+  }
+
   let availableActions = $derived.by((): ActionSuggestion[] => {
     const actor = encounter.effectiveActor;
     if (!actor) return [];
@@ -558,44 +616,31 @@
     }
     selectedLibAction = action.libAction ?? null;
 
-    // Dice hint and damage effect population
+    // Damage-widget population. The under-bar hint string is built afterward
+    // from formatAccuracy/formatEffect so it also covers saves and conditions,
+    // not just the damage roll.
     if (action.authoredDmg && action.authoredDmg.length > 0) {
-      const parts = action.authoredDmg
-        .filter((d) => d.dice)
-        .map((d) => `${d.dice} ${d.type}`);
-      diceHint = parts.length > 0 ? parts.join(" + ") : null;
       if (preset !== "heal") setDamageEffects(action.authoredDmg);
     } else if (action.libAction?.damageType) {
       // Skip if damage is deferred via a tag effect (e.g., Spiritual Weapon)
       const hasDeferredDamage = action.libAction.effects?.some(
         (e) => e.type === "tag" && (e.dice || e.damageType),
       );
-      if (!hasDeferredDamage) {
-        diceHint = action.libAction.dice
-          ? `${action.libAction.dice} ${action.libAction.damageType}`
-          : null;
-        if (preset !== "heal") setDamageEffects([{ dice: "", type: action.libAction.damageType }]);
+      if (!hasDeferredDamage && preset !== "heal") {
+        setDamageEffects([{ dice: "", type: action.libAction.damageType }]);
       }
     } else {
       // Selected action has no damage data; clear the default empty damage
       // chit (added at component init for the "attack" preset) so abilities
       // like Dissonant Hush don't show a useless 0 dmg slot.
-      diceHint = null;
       if (preset !== "heal") setDamageEffects([]);
     }
 
-    // Prepend attack bonus to dice hint.
-    // Priority: action's own toHit > combatant's spellAttack (for spells) > combatant's toHit
-    const actor = encounter.effectiveActor;
-    const actionToHit = action.toHit ?? action.libAction?.toHit;
-    const defaultToHit = action.isSpell
-      ? (actor?.spellAttack ?? actor?.toHit)
-      : actor?.toHit;
-    const toHit = actionToHit ?? defaultToHit;
-    if (toHit != null) {
-      const bonus = toHit >= 0 ? `+${toHit} to hit` : `${toHit} to hit`;
-      diceHint = diceHint ? `${bonus}; ${diceHint}` : bonus;
-    }
+    // Under-bar hint: accuracy (attack bonus or save) plus the effect it lands.
+    const accuracy = formatAccuracy(action);
+    const effectSummary = formatEffect(action);
+    diceHint =
+      [accuracy, effectSummary].filter((p): p is string => !!p).join("; ") || null;
 
     // Concentration
     if (action.conc || action.libAction?.concentration) isConc = true;
@@ -1829,7 +1874,7 @@
 {/if}
 
 {#if diceHint}
-  <div class="dnd-dice-hint">Roll: {diceHint}</div>
+  <div class="dnd-dice-hint">{diceHint}</div>
 {:else if actionNote}
   <div class="dnd-dice-hint">{actionNote}</div>
 {/if}
@@ -1895,21 +1940,18 @@
 {#if showViaSuggestions && combinedSuggestions.length > 0}
   <div class="dnd-dropdown" style="max-height: 240px;" use:constrainToViewport>
     {#each combinedSuggestions as action}
+      {@const accuracy = formatAccuracy(action)}
+      {@const effect = formatEffect(action)}
       <button
         class="dnd-dropdown-row dnd-via-suggestion"
         onmousedown={() => selectAction(action)}
       >
         <span class="dnd-via-name">{action.name}</span>
-        {#if (action.toHit ?? action.libAction?.toHit ?? (action.isSpell ? encounter.effectiveActor?.spellAttack : encounter.effectiveActor?.toHit)) != null}
-          {@const effectiveToHit = action.toHit ?? action.libAction?.toHit ?? (action.isSpell ? (encounter.effectiveActor?.spellAttack ?? encounter.effectiveActor?.toHit) : encounter.effectiveActor?.toHit)}
-          <span class="dnd-via-tohit">+{effectiveToHit}</span>
+        {#if accuracy}
+          <span class="dnd-via-tohit">{accuracy}</span>
         {/if}
-        {#if action.authoredDmg && action.authoredDmg.length > 0}
-          <span class="dnd-via-detail">
-            {action.authoredDmg.map((d) => `${d.dice} ${d.type}`.trim()).join(" + ")}
-          </span>
-        {:else if action.note}
-          <span class="dnd-via-detail">{action.note}</span>
+        {#if effect}
+          <span class="dnd-via-detail">{effect}</span>
         {/if}
         {#if action.isSpell}
           <span class="dnd-via-badge">spell</span>

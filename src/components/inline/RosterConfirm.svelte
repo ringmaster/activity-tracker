@@ -3,6 +3,7 @@
   import type { EncounterState } from "../../state/encounter-state.svelte";
   import type { RosterEntry, PCToAdd } from "../../state/combat-engine.svelte";
   import type { Party } from "../../types/party";
+  import { checkEncounterReadiness } from "../../state/encounter-readiness";
 
   let { encounter, npcs, pcs, parties = [], onStart, onCancel }: {
     encounter: EncounterState;
@@ -57,6 +58,11 @@
   // Multiple guest slots
   let nextGuestKey = $state(0);
   let guests = $state<{ key: number; name: string; init: string }[]>([]);
+
+  // Informational pre-flight readiness: lists reference values (HP, AC, attack
+  // bonuses, unresolved statblocks) the tracker couldn't fill. Never blocks the
+  // Start button; just tells the DM what to fix in the source.
+  let readiness = $derived(checkEncounterReadiness(encounter, encounter.app));
 
   // Initialize NPC init + zone values once, and refresh when the NPC list
   // changes (e.g. encounter swap). The zoneSelections merge is wrapped in
@@ -315,8 +321,21 @@
     {/if}
   </div>
 
+  {#if readiness.length > 0}
+    <div class="dnd-preflight">
+      <div class="dnd-preflight-title">
+        &#9888; {readiness.length} value{readiness.length === 1 ? "" : "s"} missing &mdash; you can still start
+      </div>
+      {#each readiness as issue (issue.combatantId + issue.message)}
+        <div class="dnd-preflight-item">
+          <span class="dnd-preflight-name">{issue.combatantName}:</span> {issue.message}
+        </div>
+      {/each}
+    </div>
+  {/if}
+
   <div style="display: flex; gap: 8px;">
-    <button class="dnd-encounter-btn" onclick={handleStart}>Start</button>
+    <button class="dnd-encounter-btn" onclick={handleStart}>{encounter.practiceMode ? "Start Practice" : "Start"}</button>
     <button class="dnd-encounter-btn stop" onclick={onCancel}>Cancel</button>
   </div>
 </div>

@@ -176,6 +176,35 @@ export function getCreature(app: App, name: string): CreatureData | null {
   };
 }
 
+/** Resolve the attack bonus for a named attack from a creature's statblock,
+ *  matching the action name against the bestiary's parsed attacks. Lets a
+ *  library-string action like "Glaive" on an NPC borrow the to-hit the
+ *  bestiary already provides, instead of forcing an authored `toHit:` on the
+ *  combatant. Returns null when the statblock is unavailable or no attack with
+ *  a parsed to-hit matches. */
+export function getStatblockActionToHit(
+  app: App,
+  statblock: string | undefined,
+  actionName: string,
+): number | null {
+  if (!statblock || !actionName) return null;
+  const creature = getCreature(app, statblock);
+  if (!creature?.actions) return null;
+  const want = actionName.trim().toLowerCase();
+  // Exact (normalized) match first; then a contains match in either direction
+  // so "Glaive" pairs with a "Glaive (Reach)" entry and vice versa.
+  const exact = creature.actions.find(
+    (a) => a.toHit != null && a.name.trim().toLowerCase() === want,
+  );
+  if (exact) return exact.toHit ?? null;
+  const loose = creature.actions.find((a) => {
+    if (a.toHit == null) return false;
+    const have = a.name.trim().toLowerCase();
+    return have.includes(want) || want.includes(have);
+  });
+  return loose?.toHit ?? null;
+}
+
 /** Run the per-action parser over the bestiary's raw actions array. The raw
  *  shape Fantasy Statblocks emits is `{ name, desc }` (or `description`);
  *  the parser handles either. Returns undefined for missing/empty input so

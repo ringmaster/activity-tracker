@@ -274,7 +274,10 @@ export default class ActivityTrackerPlugin extends Plugin {
     // Reload from parsed YAML so in-memory state stays in sync.
     let state = this.encounterStates.get(key);
     if (state) {
-      state.loadFromData(parsed);
+      // Skip reload during a practice run: practice state lives only in memory
+      // (the file is never written), so re-hydrating from the file here would
+      // clobber the in-progress run on any block re-render.
+      if (!state.practiceMode) state.loadFromData(parsed);
     } else {
       state = new EncounterState(
         this.app,
@@ -283,6 +286,10 @@ export default class ActivityTrackerPlugin extends Plugin {
         parsed,
       );
       state.onDeactivate = () => this.hideBar();
+      // Show the bar when the encounter goes active. Deferred so the click that
+      // started it finishes first; in normal mode the file-write re-render also
+      // triggers this, but in practice mode (no write) it's the only trigger.
+      state.onActivate = () => setTimeout(() => this.updateBarVisibility(), 50);
       // Wire the blocking-encounter callback so the inline view can disable
       // Run/Continue when a sibling block in the same file is already active.
       state.blockingEncounterName = () => {

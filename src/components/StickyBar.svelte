@@ -517,6 +517,10 @@
   }
 </script>
 
+{#if encounter.practiceMode}
+  <div class="dnd-practice-badge">&#127922; Practice &mdash; nothing is saved</div>
+{/if}
+
 {#if combatOver}
   <div class="dnd-bar">
     <div class="dnd-combat-over">Combat Over!</div>

@@ -50,32 +50,36 @@ export function prepareRoster(
   const npcs: RosterEntry[] = state.combatants
     .filter((c) => c.type === "npc")
     .map((c) => {
+      // Resolve the bestiary creature once and reuse it for every auto-fill
+      // below, rather than re-fetching per concern.
+      const creature = c.statblock ? getCreature(app, c.statblock) : null;
+
       let init = c.init;
-      if (init === null && c.statblock) {
-        const creature = getCreature(app, c.statblock);
-        if (creature?.dexMod !== undefined) {
-          init = rollInitiative(creature.dexMod);
-        }
+      if (init === null && creature?.dexMod !== undefined) {
+        init = rollInitiative(creature.dexMod);
       }
       if (init === null) {
         init = rollInitiative(0);
       }
 
       // Auto-populate HP from statblock if not set
-      if (c.type === "npc" && c.hp && c.hp.max === 0 && c.statblock) {
-        const creature = getCreature(app, c.statblock);
-        if (creature?.hp) {
-          c.hp = { current: creature.hp, max: creature.hp };
-        }
+      if (c.type === "npc" && c.hp && c.hp.max === 0 && creature?.hp) {
+        c.hp = { current: creature.hp, max: creature.hp };
+      }
+
+      // Auto-populate AC from the statblock when not authored. getCreature
+      // already returns the bestiary AC; previously it was fetched and then
+      // discarded, so a statblock-only NPC showed no AC.
+      if (c.ac == null && creature?.ac != null) {
+        c.ac = creature.ac;
       }
 
       // Auto-populate resistances/immunities/vulnerabilities from the
       // bestiary if not authored on the NPC. Authored lists win.
-      if (c.statblock && (!c.resistances && !c.immunities && !c.vulnerabilities)) {
-        const creature = getCreature(app, c.statblock);
-        if (creature?.resistances) c.resistances = creature.resistances;
-        if (creature?.immunities) c.immunities = creature.immunities;
-        if (creature?.vulnerabilities) c.vulnerabilities = creature.vulnerabilities;
+      if (creature && !c.resistances && !c.immunities && !c.vulnerabilities) {
+        if (creature.resistances) c.resistances = creature.resistances;
+        if (creature.immunities) c.immunities = creature.immunities;
+        if (creature.vulnerabilities) c.vulnerabilities = creature.vulnerabilities;
       }
 
       // Auto-populate actions from the bestiary's parsed action list when
@@ -83,9 +87,8 @@ export function prepareRoster(
       // range, save, and stashes the full prose in desc; whatever it misses,
       // the DM composes at the table via the + menu. Authored actions still
       // win wholesale so any hand-tuning isn't clobbered by the bestiary.
-      if (c.statblock && (!c.actions || c.actions.length === 0)) {
-        const creature = getCreature(app, c.statblock);
-        if (creature?.actions) c.actions = creature.actions;
+      if (creature?.actions && (!c.actions || c.actions.length === 0)) {
+        c.actions = creature.actions;
       }
 
       return {
@@ -292,6 +295,11 @@ export function startEncounter(
       start_turn: { who: first.id, init: first.init ?? 0, at: now },
     });
   }
+
+  // Show the sticky bar. In normal mode the post-start file write re-renders
+  // the block and triggers this anyway; in practice mode there's no write, so
+  // this is what makes the bar appear.
+  state.onActivate?.();
 }
 
 /** Scan all combatants for actions with active_at_start effects and apply them as tags.
@@ -506,12 +514,14 @@ export async function endEncounter(state: EncounterState): Promise<void> {
   state.onDeactivate?.();
 }
 
-/** Reset the encounter to its authored starting state by rewinding the log
- *  in reverse order. Every state mutation made during the encounter is
- *  recorded in the log; replaying it backward returns the encounter to its
- *  pre-start shape. PCs (added at start time) are removed; NPCs/objects
- *  authored in the YAML remain. */
-export async function resetEncounter(state: EncounterState): Promise<void> {
+/** Roll the encounter back to its authored starting state, in memory only, by
+ *  rewinding the log in reverse order. Every state mutation made during the
+ *  encounter is recorded in the log; replaying it backward returns the
+ *  encounter to its pre-start shape. PCs (added at start time) are removed;
+ *  NPCs/objects authored in the YAML remain. Does NOT flush or touch practice
+ *  mode; shared by the user-facing reset and by practice-mode entry (which
+ *  needs a clean roster without writing or leaving practice). */
+export function rewindToAuthored(state: EncounterState): void {
   // Rewind the log in reverse order. This handles damage restoration, tag
   // removal, counter decrement, ack un-fire, spawn removal, etc.
   rewindAll(state);
@@ -558,7 +568,18 @@ export async function resetEncounter(state: EncounterState): Promise<void> {
       c.hp.current = c.hp.max;
     }
   }
+}
 
+/** Reset the encounter to its authored starting state and persist. A reset
+ *  triggered during a practice run instead ends practice: the file was never
+ *  written, so exitPractice() restores the pre-practice state and hides the bar
+ *  (there's nothing to roll back on disk). */
+export async function resetEncounter(state: EncounterState): Promise<void> {
+  if (state.practiceMode) {
+    state.exitPractice();
+    return;
+  }
+  rewindToAuthored(state);
   await state.flushNow();
   state.onDeactivate?.();
 }
